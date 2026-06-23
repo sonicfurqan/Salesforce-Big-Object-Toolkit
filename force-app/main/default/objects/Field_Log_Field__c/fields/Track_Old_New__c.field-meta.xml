@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Track_Old_New__c</fullName>
+    <defaultValue>true</defaultValue>
+    <description>Capture both old and new values.</description>
+    <externalId>false</externalId>
+    <label>Track Old/New</label>
+    <type>Checkbox</type>
+</CustomField>

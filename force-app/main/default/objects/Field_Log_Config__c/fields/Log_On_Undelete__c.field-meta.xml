@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Log_On_Undelete__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Capture changes on record undeletion.</description>
+    <externalId>false</externalId>
+    <label>Log On Undelete</label>
+    <type>Checkbox</type>
+</CustomField>

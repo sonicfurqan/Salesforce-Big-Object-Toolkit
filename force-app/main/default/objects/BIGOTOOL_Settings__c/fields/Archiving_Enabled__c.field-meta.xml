@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Archiving_Enabled__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Org/profile/user toggle for archiving.</description>
+    <externalId>false</externalId>
+    <label>Archiving Enabled</label>
+    <type>Checkbox</type>
+</CustomField>

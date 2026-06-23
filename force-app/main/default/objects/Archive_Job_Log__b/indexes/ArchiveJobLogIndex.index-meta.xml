@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Index xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>ArchiveJobLogIndex</fullName>
+    <label>Archive Job Log Index</label>
+    <fields>
+        <name>ConfigName__c</name>
+        <sortDirection>ASC</sortDirection>
+    </fields>
+    <fields>
+        <name>RunDateTime__c</name>
+        <sortDirection>DESC</sortDirection>
+    </fields>
+    <fields>
+        <name>JobType__c</name>
+        <sortDirection>ASC</sortDirection>
+    </fields>
+</Index>

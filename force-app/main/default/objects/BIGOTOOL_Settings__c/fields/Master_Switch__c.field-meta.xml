@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Master_Switch__c</fullName>
+    <defaultValue>true</defaultValue>
+    <description>Global kill-switch for all BIGOTOOL automation.</description>
+    <externalId>false</externalId>
+    <label>Master Switch</label>
+    <type>Checkbox</type>
+</CustomField>

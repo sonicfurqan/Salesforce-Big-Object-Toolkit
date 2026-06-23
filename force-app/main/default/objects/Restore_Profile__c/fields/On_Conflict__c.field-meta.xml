@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>On_Conflict__c</fullName>
+    <description>Behavior when a matching record already exists in the target object.</description>
+    <externalId>false</externalId>
+    <label>On Conflict</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Skip</fullName>
+                <default>true</default>
+                <label>Skip</label>
+            </value>
+            <value>
+                <fullName>Overwrite</fullName>
+                <default>false</default>
+                <label>Overwrite</label>
+            </value>
+            <value>
+                <fullName>Clone</fullName>
+                <default>false</default>
+                <label>Clone</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

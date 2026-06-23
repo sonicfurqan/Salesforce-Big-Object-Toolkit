@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Debug_Mode__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Verbose Archive_Job_Log__b writes.</description>
+    <externalId>false</externalId>
+    <label>Debug Mode</label>
+    <type>Checkbox</type>
+</CustomField>

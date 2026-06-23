@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Restore_Profile__c</fullName>
+    <description>Restore behavior used when rehydrating archived records.</description>
+    <externalId>false</externalId>
+    <label>Restore Profile</label>
+    <referenceTo>Restore_Profile__c</referenceTo>
+    <relationshipLabel>Archive Configs</relationshipLabel>
+    <relationshipName>Archive_Configs</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

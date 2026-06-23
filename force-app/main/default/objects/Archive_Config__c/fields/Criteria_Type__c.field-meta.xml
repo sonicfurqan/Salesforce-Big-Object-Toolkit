@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Criteria_Type__c</fullName>
+    <description>How records are selected for archival.</description>
+    <externalId>false</externalId>
+    <label>Criteria Type</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>Age</fullName>
+                <default>true</default>
+                <label>Age</label>
+            </value>
+            <value>
+                <fullName>SOQL_Filter</fullName>
+                <default>false</default>
+                <label>SOQL Filter</label>
+            </value>
+            <value>
+                <fullName>Both</fullName>
+                <default>false</default>
+                <label>Both</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
