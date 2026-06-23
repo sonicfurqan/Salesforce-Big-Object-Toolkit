@@ -1,5 +1,8 @@
 {
   "trailingComma": "none",
+  "htmlWhitespaceSensitivity": "ignore",
+  "singleAttributePerLine": false,
+  "printWidth": 120,
   "plugins": [
     "prettier-plugin-apex",
     "@prettier/plugin-xml"
@@ -7,11 +10,19 @@
   "overrides": [
     {
       "files": "**/lwc/**/*.html",
-      "options": { "parser": "lwc" }
+      "options": {
+        "parser": "lwc",
+        "singleAttributePerLine": false,
+        "printWidth": 120
+      }
     },
     {
       "files": "*.{cmp,page,component}",
-      "options": { "parser": "html" }
+      "options": {
+        "parser": "html",
+        "singleAttributePerLine": false,
+        "printWidth": 120
+      }
     }
   ]
 }

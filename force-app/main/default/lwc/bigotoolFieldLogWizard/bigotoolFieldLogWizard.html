@@ -1,0 +1,269 @@
+<template>
+  <lightning-card title="Field History Wizard" icon-name="standard:event">
+    <div class="slds-p-horizontal_medium">
+      <lightning-progress-indicator current-step={currentStep} type="path" variant="base">
+        <template for:each={steps} for:item="step">
+          <lightning-progress-step key={step.value} label={step.label} value={step.value}></lightning-progress-step>
+        </template>
+      </lightning-progress-indicator>
+    </div>
+
+    <template if:true={isLoading}>
+      <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+
+    <div class="slds-p-around_medium">
+      <!-- Success state -->
+      <template if:true={saved}>
+        <div class="slds-box slds-theme_success slds-text-align_center">
+          <lightning-icon icon-name="action:approval" size="small"></lightning-icon>
+          <h2 class="slds-text-heading_medium slds-p-top_small">Configuration saved</h2>
+          <p class="slds-p-vertical_small">
+            Field history for
+            <b>{sourceObject}</b>
+            is configured to track
+            <b>{selectedFieldCount}</b>
+            field(s).
+          </p>
+          <div class="slds-m-top_small">
+            <lightning-button
+              label="View record"
+              variant="brand"
+              class="slds-m-right_x-small"
+              onclick={navigateToRecord}
+            ></lightning-button>
+            <lightning-button label="Create another" onclick={handleStartOver}></lightning-button>
+          </div>
+        </div>
+      </template>
+
+      <template if:false={saved}>
+        <!-- STEP 1: Object -->
+        <template if:true={isStep1}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 1 · Choose Object</h2>
+          <lightning-input
+            type="search"
+            label="Search objects"
+            placeholder="Search objects…"
+            value={objectSearch}
+            onchange={handleObjectSearch}
+          ></lightning-input>
+          <div class="slds-scrollable_y option-list slds-m-top_small">
+            <template for:each={filteredObjectOptions} for:item="opt">
+              <div
+                key={opt.value}
+                class="slds-p-around_x-small slds-border_bottom option-row"
+                data-value={opt.value}
+                data-label={opt.label}
+                onclick={handleObjectSelect}
+              >
+                <lightning-input
+                  type="radio"
+                  name="objectChoice"
+                  label={opt.label}
+                  value={opt.value}
+                  checked={opt.selected}
+                  data-value={opt.value}
+                ></lightning-input>
+              </div>
+            </template>
+          </div>
+          <template if:true={sourceObject}>
+            <p class="slds-m-top_small slds-text-color_success">
+              Selected:
+              <b>{sourceObject}</b>
+            </p>
+          </template>
+        </template>
+
+        <!-- STEP 2: Fields -->
+        <template if:true={isStep2}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 2 · Select Fields to Track</h2>
+          <div class="slds-text-color_weak slds-m-bottom_small">
+            Native field history is limited to 20 fields — BIGOTOOL has no limit.
+          </div>
+          <lightning-input
+            type="search"
+            label="Search available fields"
+            value={fieldSearch}
+            onchange={handleFieldSearch}
+          ></lightning-input>
+          <div class="slds-grid slds-gutters slds-m-top_small">
+            <div class="slds-col slds-size_1-of-2">
+              <p class="slds-text-title_caps slds-m-bottom_x-small">Available</p>
+              <div class="slds-scrollable_y option-list">
+                <template for:each={availableFields} for:item="f">
+                  <div
+                    key={f.apiName}
+                    class="slds-grid slds-grid_align-spread slds-p-around_x-small slds-border_bottom"
+                  >
+                    <span>
+                      <b>{f.label}</b>
+                      <span class="slds-text-color_weak">· {f.apiName}</span>
+                    </span>
+                    <lightning-button-icon
+                      icon-name="utility:add"
+                      alternative-text="Add"
+                      data-value={f.apiName}
+                      onclick={handleAddField}
+                    ></lightning-button-icon>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div class="slds-col slds-size_1-of-2">
+              <p class="slds-text-title_caps slds-m-bottom_x-small">Tracked ({selectedFieldCount})</p>
+              <div class="slds-scrollable_y option-list">
+                <template for:each={trackedFields} for:item="f">
+                  <div key={f.apiName} class="slds-p-around_x-small slds-border_bottom">
+                    <div class="slds-grid slds-grid_align-spread">
+                      <span><b>{f.label}</b></span>
+                      <lightning-button-icon
+                        icon-name="utility:dash"
+                        alternative-text="Remove"
+                        data-value={f.apiName}
+                        onclick={handleRemoveField}
+                      ></lightning-button-icon>
+                    </div>
+                    <div class="slds-grid slds-gutters_xx-small slds-m-top_xx-small">
+                      <div class="slds-col">
+                        <lightning-input
+                          type="toggle"
+                          label="Mask PII"
+                          message-toggle-active="On"
+                          message-toggle-inactive="Off"
+                          checked={f.maskValue}
+                          data-value={f.apiName}
+                          onchange={handleMaskToggle}
+                        ></lightning-input>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- STEP 3: Events & Mode -->
+        <template if:true={isStep3}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 3 · Events &amp; Async Mode</h2>
+          <p class="slds-text-color_weak slds-m-bottom_small">
+            Select which record events to capture into field history.
+          </p>
+          <lightning-input
+            type="checkbox"
+            label="Log on Create"
+            checked={logOnCreate}
+            onchange={handleLogOnCreate}
+          ></lightning-input>
+          <lightning-input
+            type="checkbox"
+            label="Log on Update"
+            field-level-help="Capture old/new field values whenever a record is updated."
+            checked={logOnUpdate}
+            onchange={handleLogOnUpdate}
+          ></lightning-input>
+          <lightning-input
+            type="checkbox"
+            label="Log on Delete"
+            checked={logOnDelete}
+            onchange={handleLogOnDelete}
+          ></lightning-input>
+          <lightning-input
+            type="checkbox"
+            label="Log on Undelete"
+            checked={logOnUndelete}
+            onchange={handleLogOnUndelete}
+          ></lightning-input>
+          <lightning-combobox
+            class="slds-m-top_small"
+            label="Async Mode"
+            value={asyncMode}
+            options={asyncModeOptions}
+            onchange={handleAsyncMode}
+          ></lightning-combobox>
+        </template>
+
+        <!-- STEP 4: Retention -->
+        <template if:true={isStep4}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 4 · Retention</h2>
+          <lightning-input
+            type="text"
+            label="Configuration Name"
+            value={configName}
+            onchange={handleConfigName}
+          ></lightning-input>
+          <lightning-input
+            class="slds-m-top_small"
+            type="number"
+            label="Retention (days)"
+            min="0"
+            value={retentionDays}
+            field-level-help="0 = keep forever. Otherwise a purge job removes rows older than this."
+            onchange={handleRetention}
+          ></lightning-input>
+        </template>
+
+        <!-- STEP 5: Review -->
+        <template if:true={isStep5}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 5 · Review &amp; Generate</h2>
+          <dl class="slds-dl_horizontal">
+            <dt class="slds-dl_horizontal__label">Object</dt>
+            <dd class="slds-dl_horizontal__detail">{sourceObject}</dd>
+            <dt class="slds-dl_horizontal__label">Config Name</dt>
+            <dd class="slds-dl_horizontal__detail">{configName}</dd>
+            <dt class="slds-dl_horizontal__label">Events</dt>
+            <dd class="slds-dl_horizontal__detail">{eventSummary}</dd>
+            <dt class="slds-dl_horizontal__label">Async Mode</dt>
+            <dd class="slds-dl_horizontal__detail">{asyncMode}</dd>
+            <dt class="slds-dl_horizontal__label">Retention</dt>
+            <dd class="slds-dl_horizontal__detail">{retentionSummary}</dd>
+          </dl>
+          <p class="slds-text-title_caps slds-m-top_small slds-m-bottom_x-small">
+            Tracked Fields ({selectedFieldCount})
+          </p>
+          <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+            <thead>
+              <tr class="slds-line-height_reset">
+                <th>Field</th>
+                <th>PII</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template for:each={reviewFields} for:item="f">
+                <tr key={f.apiName}>
+                  <td>
+                    {f.label}
+                    <span class="slds-text-color_weak">({f.apiName})</span>
+                  </td>
+                  <td>{f.maskLabel}</td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </template>
+      </template>
+    </div>
+
+    <!-- Footer buttons -->
+    <template if:false={saved}>
+      <div slot="footer" class="slds-grid slds-grid_align-spread">
+        <lightning-button label="Previous" onclick={handlePrevious} disabled={isFirstStep}></lightning-button>
+        <div>
+          <template if:false={isLastStep}>
+            <lightning-button
+              label="Next"
+              variant="brand"
+              onclick={handleNext}
+              disabled={nextDisabled}
+            ></lightning-button>
+          </template>
+          <template if:true={isLastStep}>
+            <lightning-button label="Generate" variant="brand" onclick={handleGenerate}></lightning-button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </lightning-card>
+</template>

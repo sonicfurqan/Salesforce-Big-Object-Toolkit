@@ -1,0 +1,6 @@
+<aura:component
+  implements="lightning:actionOverride,force:appHostable,flexipage:availableForAllPageTypes"
+  access="global"
+>
+  <c:bigotoolFieldLogWizard />
+</aura:component>

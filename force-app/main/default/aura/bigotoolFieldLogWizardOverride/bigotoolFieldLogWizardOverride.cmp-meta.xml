@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<AuraDefinitionBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>67.0</apiVersion>
+    <description
+  >Wrapper that launches the Field History Wizard as the New action override for Field Log Config.</description>
+</AuraDefinitionBundle>
