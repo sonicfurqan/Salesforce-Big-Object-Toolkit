@@ -4,6 +4,7 @@
     <formFactors>Large</formFactors>
     <label>Big Object Tooling</label>
     <navType>Standard</navType>
+    <tabs>BIGOTOOL_Dashboard</tabs>
     <tabs>Archive_Config__c</tabs>
     <tabs>Field_Log_Config__c</tabs>
     <tabs>Restore_Profile__c</tabs>

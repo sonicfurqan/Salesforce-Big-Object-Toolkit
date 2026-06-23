@@ -1,8 +1,9 @@
-import { LightningElement, track } from "lwc";
+import { LightningElement, api, track } from "lwc";
 import { NavigationMixin } from "lightning/navigation";
 import { ShowToastEvent } from "lightning/platformShowToastEvent";
 import getObjectOptions from "@salesforce/apex/BIGOTOOL_FieldLogWizardController.getObjectOptions";
 import getFieldOptions from "@salesforce/apex/BIGOTOOL_FieldLogWizardController.getFieldOptions";
+import getConfigForEdit from "@salesforce/apex/BIGOTOOL_FieldLogWizardController.getConfigForEdit";
 import saveConfig from "@salesforce/apex/BIGOTOOL_FieldLogWizardController.saveConfig";
 
 const STEPS = [
@@ -23,9 +24,12 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
   steps = STEPS;
   asyncModeOptions = ASYNC_MODES;
 
+  @api recordId;
+
   @track currentStep = "1";
   @track isLoading = false;
   @track saved = false;
+  @track isActive = true;
   savedConfigId;
 
   // Step 1
@@ -54,7 +58,51 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
   configName = "";
 
   connectedCallback() {
-    this.loadObjects();
+    if (this.recordId) {
+      this.loadForEdit();
+    } else {
+      this.loadObjects();
+    }
+  }
+
+  get isEditMode() {
+    return !!this.recordId;
+  }
+
+  get cardTitle() {
+    return this.isEditMode ? "Edit Field History Configuration" : "Field History Wizard";
+  }
+
+  async loadForEdit() {
+    this.isLoading = true;
+    try {
+      const detail = await getConfigForEdit({ configId: this.recordId });
+      this.sourceObject = detail.sourceObject;
+      this.sourceObjectLabel = detail.sourceObjectLabel || "";
+      this.configName = detail.configName || "";
+      this.isActive = detail.isActive === true;
+      this.logOnCreate = detail.logOnCreate === true;
+      this.logOnUpdate = detail.logOnUpdate !== false;
+      this.logOnDelete = detail.logOnDelete === true;
+      this.logOnUndelete = detail.logOnUndelete === true;
+      this.asyncMode = detail.asyncMode || "PlatformEvent";
+      this.retentionDays = detail.retentionDays == null ? 0 : detail.retentionDays;
+
+      const names = [];
+      const cfg = {};
+      (detail.fields || []).forEach((f) => {
+        names.push(f.fieldApiName);
+        cfg[f.fieldApiName] = { maskValue: f.maskValue === true };
+      });
+      this.selectedFieldNames = names;
+      this.trackedConfig = cfg;
+
+      await this.loadFields();
+    } catch (e) {
+      this.notifyError("Unable to load configuration", e);
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   async loadObjects() {
@@ -115,6 +163,10 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
 
   get retentionSummary() {
     return Number(this.retentionDays) > 0 ? `${this.retentionDays} days` : "Infinite (no purge)";
+  }
+
+  get activeSummary() {
+    return this.isActive ? "Active" : "Inactive";
   }
 
   get selectedFieldCount() {
@@ -236,6 +288,10 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
     this.configName = event.target.value;
   }
 
+  handleActiveToggle(event) {
+    this.isActive = event.target.checked;
+  }
+
   // Navigation
   handleNext() {
     const idx = Number(this.currentStep);
@@ -258,10 +314,11 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
     this.isLoading = true;
     try {
       const input = {
+        configId: this.recordId || null,
         configName: this.configName,
         sourceObject: this.sourceObject,
         sourceObjectLabel: this.sourceObjectLabel,
-        isActive: true,
+        isActive: this.isActive,
         logOnCreate: this.logOnCreate,
         logOnUpdate: this.logOnUpdate,
         logOnDelete: this.logOnDelete,
@@ -310,8 +367,34 @@ export default class BigotoolFieldLogWizard extends NavigationMixin(LightningEle
     this.asyncMode = "PlatformEvent";
     this.retentionDays = 0;
     this.configName = "";
+    this.isActive = true;
     this.saved = false;
     this.savedConfigId = undefined;
+  }
+
+  handleCancel() {
+    if (this.isEditMode) {
+      // Navigate back to the record being edited
+      this[NavigationMixin.Navigate]({
+        type: "standard__recordPage",
+        attributes: {
+          recordId: this.recordId,
+          actionName: "view"
+        }
+      });
+    } else {
+      // Navigate to the list view of Field_Log_Config__c
+      this[NavigationMixin.Navigate]({
+        type: "standard__objectPage",
+        attributes: {
+          objectApiName: "Field_Log_Config__c",
+          actionName: "list"
+        },
+        state: {
+          filterName: "Recent"
+        }
+      });
+    }
   }
 
   navigateToRecord() {

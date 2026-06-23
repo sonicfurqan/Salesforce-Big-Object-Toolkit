@@ -9,9 +9,17 @@
         <visible>true</visible>
     </applicationVisibilities>
     <classAccesses>
+        <apexClass>BIGOTOOL_DashboardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>BIGOTOOL_HistoryController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <tabSettings>
+        <tab>BIGOTOOL_Dashboard</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
     <objectPermissions>
         <allowCreate>false</allowCreate>
         <allowDelete>false</allowDelete>

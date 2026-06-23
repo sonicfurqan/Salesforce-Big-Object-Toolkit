@@ -24,6 +24,9 @@ export default class BigotoolHistoryTimeline extends LightningElement {
   // 'timeline' | 'table'
   viewMode = "timeline";
 
+  // filter panel visibility
+  showFilters = false;
+
   // filter state
   fieldFilter = "";
   changeTypeFilter = "";
@@ -124,6 +127,7 @@ export default class BigotoolHistoryTimeline extends LightningElement {
     this.cursor = undefined;
     this.hasMore = false;
     this.error = undefined;
+    this.loading = false;
     this.fetchPage(null);
   }
 
@@ -182,7 +186,18 @@ export default class BigotoolHistoryTimeline extends LightningElement {
     this.rebuildEntries();
   }
 
+  handleFilterToggle() {
+    this.showFilters = !this.showFilters;
+  }
+
+  get filterButtonVariant() {
+    return this.showFilters ? "brand" : "border-filled";
+  }
+
   handleRefresh() {
+    this.fieldFilter = "";
+    this.changeTypeFilter = "";
+    this.userFilter = "";
     this.loadFirstPage();
   }
 

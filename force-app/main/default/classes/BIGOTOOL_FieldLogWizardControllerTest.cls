@@ -291,101 +291,49 @@ private class BIGOTOOL_FieldLogWizardControllerTest {
   }
 
   @IsTest
-  static void generateTriggerCodeBuildsCodeAndSetsFlag() {
+  static void getConfigForEditReturnsDetail() {
     BIGOTOOL_FieldLogWizardController.ConfigInput cfgIn = buildInput();
     Id configId;
-    BIGOTOOL_FieldLogWizardController.TriggerCodeResult res;
-    System.runAs(configuratorUser()) {
-      configId = saveCfg(cfgIn);
-      Test.startTest();
-      res = BIGOTOOL_FieldLogWizardController.generateTriggerCode(configId);
-      Test.stopTest();
-    }
-
-    System.assertNotEquals(null, res, 'Result should be returned');
-    System.assertEquals('Account', res.objectApiName);
-    System.assertEquals('AccountFieldLogTrigger', res.triggerName);
-    System.assert(
-      res.triggerBody.contains('trigger AccountFieldLogTrigger on Account'),
-      'Trigger body should declare the trigger'
-    );
-    System.assert(
-      res.triggerBody.contains('BIGOTOOL_ChangeCapture.run'),
-      'Trigger body should delegate to the handler'
-    );
-    System.assert(
-      res.events.contains('after insert') && res.events.contains('after update'),
-      'Events should reflect selected operations'
-    );
-    System.assert(String.isNotBlank(res.instructions), 'Instructions should be provided');
-
-    Field_Log_Config__c cfg = [
-      SELECT Trigger_Generated__c
-      FROM Field_Log_Config__c
-      WHERE Id = :configId
-    ];
-    System.assertEquals(true, cfg.Trigger_Generated__c, 'Trigger Generated flag should be set');
-  }
-
-  @IsTest
-  static void generateTriggerNameStripsCustomSuffix() {
-    System.assertEquals('My_ObjectFieldLogTrigger', BIGOTOOL_FieldLogWizardController.buildTriggerName('My_Object__c'));
-  }
-
-  @IsTest
-  static void generateTriggerCodeRequiresId() {
-    Boolean threw = false;
-    System.runAs(configuratorUser()) {
-      try {
-        BIGOTOOL_FieldLogWizardController.generateTriggerCode(null);
-      } catch (Exception e) {
-        threw = true;
-      }
-    }
-    System.assert(threw, 'Null config id should throw');
-  }
-
-  @IsTest
-  static void getTriggerCodeStatusReflectsGenerationWithoutSideEffect() {
-    BIGOTOOL_FieldLogWizardController.ConfigInput cfgIn = buildInput();
-    Id configId;
-    BIGOTOOL_FieldLogWizardController.TriggerCodeResult before;
-    BIGOTOOL_FieldLogWizardController.TriggerCodeResult after;
     System.runAs(configuratorUser()) {
       configId = saveCfg(cfgIn);
 
-      Test.startTest();
-      before = BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(configId);
-      BIGOTOOL_FieldLogWizardController.generateTriggerCode(configId);
-      after = BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(configId);
-      Test.stopTest();
+      BIGOTOOL_FieldLogWizardController.ConfigDetail detail = BIGOTOOL_FieldLogWizardController.getConfigForEdit(
+        configId
+      );
+      System.assertEquals(configId, detail.configId, 'configId should match');
+      System.assertEquals('Account', detail.sourceObject, 'sourceObject should match');
+      System.assertEquals(true, detail.isActive, 'isActive should match');
+      System.assertEquals(90, detail.retentionDays, 'retentionDays should match');
+      System.assertEquals(2, detail.fields.size(), 'should return both tracked fields');
     }
-
-    System.assertEquals(false, before.alreadyGenerated, 'Status should be not-generated before generation');
-    System.assert(
-      before.triggerBody.contains('trigger AccountFieldLogTrigger on Account'),
-      'Preview should still include the trigger body'
-    );
-    System.assertEquals(true, after.alreadyGenerated, 'Status should reflect generation afterward');
-
-    Field_Log_Config__c cfg = [
-      SELECT Trigger_Generated__c
-      FROM Field_Log_Config__c
-      WHERE Id = :configId
-    ];
-    System.assertEquals(true, cfg.Trigger_Generated__c, 'Status query alone must not have changed the flag');
   }
 
   @IsTest
-  static void getTriggerCodeStatusRequiresId() {
-    Boolean threw = false;
+  static void getConfigForEditNullThrows() {
     System.runAs(configuratorUser()) {
+      Boolean threw = false;
       try {
-        BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(null);
+        BIGOTOOL_FieldLogWizardController.getConfigForEdit(null);
       } catch (Exception e) {
         threw = true;
       }
+      System.assert(threw, 'Null configId should throw');
     }
-    System.assert(threw, 'Null config id should throw');
+  }
+
+  @IsTest
+  static void saveConfigUpdateTogglesActive() {
+    BIGOTOOL_FieldLogWizardController.ConfigInput first = buildInput();
+    Id configId;
+    System.runAs(configuratorUser()) {
+      configId = saveCfg(first);
+
+      BIGOTOOL_FieldLogWizardController.ConfigInput upd = buildInput();
+      upd.configId = configId;
+      upd.isActive = false;
+      saveCfg(upd);
+    }
+    Field_Log_Config__c cfg = [SELECT Is_Active__c FROM Field_Log_Config__c WHERE Id = :configId];
+    System.assertEquals(false, cfg.Is_Active__c, 'Active flag should be updated to false');
   }
 }

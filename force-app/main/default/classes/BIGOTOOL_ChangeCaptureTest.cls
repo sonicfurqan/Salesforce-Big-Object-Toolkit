@@ -43,7 +43,6 @@ private class BIGOTOOL_ChangeCaptureTest {
       )
     };
 
-    BIGOTOOL_ConfigRepo.clearCache();
     return cfg;
   }
 
@@ -174,7 +173,6 @@ private class BIGOTOOL_ChangeCaptureTest {
 
   @IsTest
   static void diffReturnsEmptyForUnknownObject() {
-    BIGOTOOL_ConfigRepo.clearCache();
     List<FieldChangeLog__b> rows = BIGOTOOL_Differ.diff(
       'Nonexistent__x',
       System.TriggerOperation.AFTER_UPDATE,

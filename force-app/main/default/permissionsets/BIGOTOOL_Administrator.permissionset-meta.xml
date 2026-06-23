@@ -9,9 +9,17 @@
         <visible>true</visible>
     </applicationVisibilities>
     <classAccesses>
+        <apexClass>BIGOTOOL_DashboardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>BIGOTOOL_HistoryController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <tabSettings>
+        <tab>BIGOTOOL_Dashboard</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
     <tabSettings>
         <tab>Archive_Config__c</tab>
         <visibility>Visible</visibility>
@@ -152,11 +160,6 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>Archive_Config__c.Generation_Status__c</field>
-        <editable>true</editable>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
-        <field>Field_Log_Config__c.Source_Object__c</field>
         <editable>true</editable>
         <readable>true</readable>
     </fieldPermissions>

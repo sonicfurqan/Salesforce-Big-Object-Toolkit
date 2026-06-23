@@ -1,0 +1,6 @@
+<aura:component
+  implements="lightning:actionOverride,force:hasRecordId,flexipage:availableForAllPageTypes"
+  access="global"
+>
+  <c:bigotoolFieldLogWizard recordId="{!v.recordId}" />
+</aura:component>

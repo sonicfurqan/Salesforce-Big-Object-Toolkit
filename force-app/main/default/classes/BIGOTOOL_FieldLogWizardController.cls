@@ -72,6 +72,33 @@ public with sharing class BIGOTOOL_FieldLogWizardController {
     public List<FieldSelection> fields;
   }
 
+  public class ConfigDetail {
+    @AuraEnabled
+    public Id configId;
+    @AuraEnabled
+    public String configName;
+    @AuraEnabled
+    public String sourceObject;
+    @AuraEnabled
+    public String sourceObjectLabel;
+    @AuraEnabled
+    public Boolean isActive;
+    @AuraEnabled
+    public Boolean logOnCreate;
+    @AuraEnabled
+    public Boolean logOnUpdate;
+    @AuraEnabled
+    public Boolean logOnDelete;
+    @AuraEnabled
+    public Boolean logOnUndelete;
+    @AuraEnabled
+    public String asyncMode;
+    @AuraEnabled
+    public Decimal retentionDays;
+    @AuraEnabled
+    public List<FieldSelection> fields;
+  }
+
   private static void assertCanConfigure() {
     if (
       !FeatureManagement.checkPermission('BIGOTOOL_Can_Configure') &&
@@ -79,6 +106,66 @@ public with sharing class BIGOTOOL_FieldLogWizardController {
     ) {
       throw new AuraHandledException('You do not have permission to configure field history logging.');
     }
+  }
+
+  @AuraEnabled(cacheable=true)
+  public static ConfigDetail getConfigForEdit(Id configId) {
+    assertCanConfigure();
+    if (configId == null) {
+      throw new AuraHandledException('A configuration record is required.');
+    }
+    List<Field_Log_Config__c> matches = [
+      SELECT
+        Id,
+        Name,
+        Source_Object__c,
+        Source_Object_Label__c,
+        Is_Active__c,
+        Log_On_Create__c,
+        Log_On_Update__c,
+        Log_On_Delete__c,
+        Log_On_Undelete__c,
+        Async_Mode__c,
+        Retention_Days__c
+      FROM Field_Log_Config__c
+      WHERE Id = :configId
+      LIMIT 1
+    ];
+    if (matches.isEmpty()) {
+      throw new AuraHandledException('Configuration record not found.');
+    }
+    Field_Log_Config__c cfg = matches[0];
+
+    ConfigDetail detail = new ConfigDetail();
+    detail.configId = cfg.Id;
+    detail.configName = cfg.Name;
+    detail.sourceObject = cfg.Source_Object__c;
+    detail.sourceObjectLabel = String.isNotBlank(cfg.Source_Object_Label__c)
+      ? cfg.Source_Object_Label__c
+      : cfg.Source_Object__c;
+    detail.isActive = cfg.Is_Active__c;
+    detail.logOnCreate = cfg.Log_On_Create__c;
+    detail.logOnUpdate = cfg.Log_On_Update__c;
+    detail.logOnDelete = cfg.Log_On_Delete__c;
+    detail.logOnUndelete = cfg.Log_On_Undelete__c;
+    detail.asyncMode = cfg.Async_Mode__c;
+    detail.retentionDays = cfg.Retention_Days__c;
+    detail.fields = new List<FieldSelection>();
+
+    for (Field_Log_Field__c f : [
+      SELECT Field_Api_Name__c, Field_Label__c, Mask_Value__c, Track_Old_New__c
+      FROM Field_Log_Field__c
+      WHERE Field_Log_Config__c = :cfg.Id
+      ORDER BY Field_Api_Name__c
+    ]) {
+      FieldSelection sel = new FieldSelection();
+      sel.fieldApiName = f.Field_Api_Name__c;
+      sel.fieldLabel = f.Field_Label__c;
+      sel.maskValue = f.Mask_Value__c;
+      sel.trackOldNew = true;
+      detail.fields.add(sel);
+    }
+    return detail;
   }
 
   @AuraEnabled(cacheable=true)
@@ -194,7 +281,9 @@ public with sharing class BIGOTOOL_FieldLogWizardController {
     cfg.Log_On_Undelete__c = input.logOnUndelete == true;
     cfg.Async_Mode__c = String.isBlank(input.asyncMode) ? 'PlatformEvent' : input.asyncMode;
     cfg.Retention_Days__c = input.retentionDays == null ? 0 : input.retentionDays;
-    cfg.Trigger_Generated__c = false;
+    if (input.configId == null) {
+      cfg.Trigger_Generated__c = false;
+    }
 
     if (
       !Schema.SObjectType.Field_Log_Config__c.isCreateable() || !Schema.SObjectType.Field_Log_Config__c.isUpdateable()
@@ -246,159 +335,6 @@ public with sharing class BIGOTOOL_FieldLogWizardController {
     insert children;
 
     return cfg.Id;
-  }
-
-  public class TriggerCodeResult {
-    @AuraEnabled
-    public String objectApiName;
-    @AuraEnabled
-    public String objectLabel;
-    @AuraEnabled
-    public String triggerName;
-    @AuraEnabled
-    public String triggerBody;
-    @AuraEnabled
-    public String events;
-    @AuraEnabled
-    public String instructions;
-    @AuraEnabled
-    public Boolean alreadyGenerated;
-  }
-
-  @AuraEnabled
-  public static TriggerCodeResult generateTriggerCode(Id configId) {
-    assertCanConfigure();
-    Field_Log_Config__c cfg = loadConfigForTrigger(configId);
-    TriggerCodeResult result = buildTriggerCodeResult(cfg);
-
-    if (cfg.Trigger_Generated__c != true) {
-      if (!Schema.SObjectType.Field_Log_Config__c.fields.Trigger_Generated__c.isUpdateable()) {
-        throw new AuraHandledException('You do not have access to update the Trigger Generated flag.');
-      }
-      cfg.Trigger_Generated__c = true;
-      update cfg;
-      result.alreadyGenerated = false;
-    }
-
-    return result;
-  }
-
-  @AuraEnabled(cacheable=true)
-  public static TriggerCodeResult getTriggerCodeStatus(Id configId) {
-    assertCanConfigure();
-    Field_Log_Config__c cfg = loadConfigForTrigger(configId);
-    return buildTriggerCodeResult(cfg);
-  }
-
-  private static Field_Log_Config__c loadConfigForTrigger(Id configId) {
-    if (configId == null) {
-      throw new AuraHandledException('A configuration record is required.');
-    }
-    List<Field_Log_Config__c> matches = [
-      SELECT
-        Id,
-        Name,
-        Source_Object__c,
-        Source_Object_Label__c,
-        Log_On_Create__c,
-        Log_On_Update__c,
-        Log_On_Delete__c,
-        Log_On_Undelete__c,
-        Async_Mode__c,
-        Trigger_Generated__c
-      FROM Field_Log_Config__c
-      WHERE Id = :configId
-      LIMIT 1
-    ];
-    if (matches.isEmpty()) {
-      throw new AuraHandledException('Configuration record not found.');
-    }
-    Field_Log_Config__c cfg = matches[0];
-    if (String.isBlank(cfg.Source_Object__c)) {
-      throw new AuraHandledException('This configuration has no source object.');
-    }
-    return cfg;
-  }
-
-  private static TriggerCodeResult buildTriggerCodeResult(Field_Log_Config__c cfg) {
-    String objApi = cfg.Source_Object__c;
-    String objLabel = String.isNotBlank(cfg.Source_Object_Label__c) ? cfg.Source_Object_Label__c : objApi;
-
-    List<String> events = new List<String>();
-    if (cfg.Log_On_Create__c) {
-      events.add('after insert');
-    }
-    if (cfg.Log_On_Update__c) {
-      events.add('after update');
-    }
-    if (cfg.Log_On_Delete__c) {
-      events.add('after delete');
-    }
-    if (cfg.Log_On_Undelete__c) {
-      events.add('after undelete');
-    }
-    if (events.isEmpty()) {
-      events.add('after update');
-    }
-    String eventList = String.join(events, ', ');
-
-    String triggerName = buildTriggerName(objApi);
-
-    String body =
-      '// GENERATED by Big Object Tooling — do not edit. Source: Field_Log_Config__c[' +
-      objApi +
-      ']\n' +
-      'trigger ' +
-      triggerName +
-      ' on ' +
-      objApi +
-      ' (' +
-      eventList +
-      ') {\n' +
-      '    BIGOTOOL_ChangeCapture.run(\'' +
-      objApi +
-      '\', Trigger.operationType, Trigger.oldMap, Trigger.newMap);\n' +
-      '}\n';
-
-    String instructions =
-      'How to add this trigger to ' +
-      objLabel +
-      ' (' +
-      objApi +
-      '):\n' +
-      '1. Make sure the reusable handler class BIGOTOOL_ChangeCapture is deployed to this org.\n' +
-      '2. In VS Code, create a new Apex Trigger file named ' +
-      triggerName +
-      '.trigger under force-app/main/default/triggers (or use Setup > Object Manager > ' +
-      objLabel +
-      ' > Triggers > New).\n' +
-      '3. Paste the generated code above and save.\n' +
-      '4. Deploy the trigger to this org (sf project deploy start) or save it in the Developer Console.\n' +
-      '5. Verify the configuration record is Active so logging is enabled at runtime.\n' +
-      'Once the trigger is in place, this configuration is marked as Trigger Generated.';
-
-    TriggerCodeResult result = new TriggerCodeResult();
-    result.objectApiName = objApi;
-    result.objectLabel = objLabel;
-    result.triggerName = triggerName;
-    result.triggerBody = body;
-    result.events = eventList;
-    result.instructions = instructions;
-    result.alreadyGenerated = cfg.Trigger_Generated__c == true;
-    return result;
-  }
-
-  @TestVisible
-  private static String buildTriggerName(String objApiName) {
-    String base = objApiName;
-    if (base.endsWithIgnoreCase('__c')) {
-      base = base.substring(0, base.length() - 3);
-    }
-    base = base.replaceAll('[^a-zA-Z0-9_]', '');
-    if (String.isBlank(base)) {
-      base = 'Object';
-    }
-    return base + 'FieldLogTrigger';
   }
 
   public class OptionLabelComparator implements Comparator<PicklistOption> {

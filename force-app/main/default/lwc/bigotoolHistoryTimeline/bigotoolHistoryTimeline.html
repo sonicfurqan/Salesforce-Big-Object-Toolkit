@@ -28,44 +28,58 @@
         ></lightning-button>
       </template>
       <lightning-button-icon
+        icon-name="utility:filterList"
+        alternative-text="Toggle filters"
+        title="Toggle filters"
+        variant={filterButtonVariant}
+        onclick={handleFilterToggle}
+        class="slds-m-left_xx-small"
+      ></lightning-button-icon>
+      <lightning-button-icon
         icon-name="utility:refresh"
         alternative-text="Refresh"
         title="Refresh"
         onclick={handleRefresh}
+        class="slds-m-left_xx-small"
       ></lightning-button-icon>
     </div>
 
     <div class="slds-card__body slds-card__body_inner">
       <!-- Filters -->
-      <div class="slds-grid slds-gutters slds-grid_vertical-align-end slds-m-bottom_small slds-wrap">
-        <div class="slds-col slds-size_1-of-3">
-          <lightning-combobox
-            label="Field"
-            value={fieldFilter}
-            options={fieldFilterOptions}
-            onchange={handleFieldFilter}
-            variant="label-stacked"
-          ></lightning-combobox>
+      <template if:true={showFilters}>
+        <div class="slds-grid slds-gutters slds-m-bottom_small slds-wrap">
+          <div class="slds-col slds-size_1-of-3">
+            <c-bigotool-searchable-picklist
+              label="Field"
+              placeholder="Search fields..."
+              all-label="All fields"
+              value={fieldFilter}
+              options={fieldFilterOptions}
+              onchange={handleFieldFilter}
+            ></c-bigotool-searchable-picklist>
+          </div>
+          <div class="slds-col slds-size_1-of-3">
+            <c-bigotool-searchable-picklist
+              label="Change type"
+              placeholder="Search change types..."
+              all-label="All types"
+              value={changeTypeFilter}
+              options={changeTypeOptions}
+              onchange={handleChangeTypeFilter}
+            ></c-bigotool-searchable-picklist>
+          </div>
+          <div class="slds-col slds-size_1-of-3">
+            <c-bigotool-searchable-picklist
+              label="Changed by"
+              placeholder="Search users..."
+              all-label="All users"
+              value={userFilter}
+              options={userOptions}
+              onchange={handleUserFilter}
+            ></c-bigotool-searchable-picklist>
+          </div>
         </div>
-        <div class="slds-col slds-size_1-of-3">
-          <lightning-combobox
-            label="Change type"
-            value={changeTypeFilter}
-            options={changeTypeOptions}
-            onchange={handleChangeTypeFilter}
-            variant="label-stacked"
-          ></lightning-combobox>
-        </div>
-        <div class="slds-col slds-size_1-of-3">
-          <lightning-combobox
-            label="Changed by"
-            value={userFilter}
-            options={userOptions}
-            onchange={handleUserFilter}
-            variant="label-stacked"
-          ></lightning-combobox>
-        </div>
-      </div>
+      </template>
 
       <!-- Error -->
       <template if:true={error}>

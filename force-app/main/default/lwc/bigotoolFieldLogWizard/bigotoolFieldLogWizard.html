@@ -1,5 +1,5 @@
 <template>
-  <lightning-card title="Field History Wizard" icon-name="standard:event">
+  <lightning-card title={cardTitle} icon-name="standard:event">
     <div class="slds-p-horizontal_medium">
       <lightning-progress-indicator current-step={currentStep} type="path" variant="base">
         <template for:each={steps} for:item="step">
@@ -41,38 +41,58 @@
         <!-- STEP 1: Object -->
         <template if:true={isStep1}>
           <h2 class="slds-text-heading_small slds-m-bottom_small">Step 1 · Choose Object</h2>
-          <lightning-input
-            type="search"
-            label="Search objects"
-            placeholder="Search objects…"
-            value={objectSearch}
-            onchange={handleObjectSearch}
-          ></lightning-input>
-          <div class="slds-scrollable_y option-list slds-m-top_small">
-            <template for:each={filteredObjectOptions} for:item="opt">
-              <div
-                key={opt.value}
-                class="slds-p-around_x-small slds-border_bottom option-row"
-                data-value={opt.value}
-                data-label={opt.label}
-                onclick={handleObjectSelect}
-              >
-                <lightning-input
-                  type="radio"
-                  name="objectChoice"
-                  label={opt.label}
-                  value={opt.value}
-                  checked={opt.selected}
+          <template if:true={isEditMode}>
+            <div class="slds-box slds-theme_shade">
+              <p class="slds-text-color_weak">Tracked object (cannot be changed)</p>
+              <p class="slds-text-heading_small slds-m-top_x-small">
+                <b>{sourceObjectLabel}</b>
+                <span class="slds-text-color_weak">· {sourceObject}</span>
+              </p>
+            </div>
+            <lightning-input
+              type="toggle"
+              class="slds-m-top_medium"
+              label="Active"
+              message-toggle-active="Active"
+              message-toggle-inactive="Inactive"
+              checked={isActive}
+              onchange={handleActiveToggle}
+            ></lightning-input>
+          </template>
+          <template if:false={isEditMode}>
+            <lightning-input
+              type="search"
+              label="Search objects"
+              placeholder="Search objects…"
+              value={objectSearch}
+              onchange={handleObjectSearch}
+            ></lightning-input>
+            <div class="slds-scrollable_y option-list slds-m-top_small">
+              <template for:each={filteredObjectOptions} for:item="opt">
+                <div
+                  key={opt.value}
+                  class="slds-p-around_x-small slds-border_bottom option-row"
                   data-value={opt.value}
-                ></lightning-input>
-              </div>
+                  data-label={opt.label}
+                  onclick={handleObjectSelect}
+                >
+                  <lightning-input
+                    type="radio"
+                    name="objectChoice"
+                    label={opt.label}
+                    value={opt.value}
+                    checked={opt.selected}
+                    data-value={opt.value}
+                  ></lightning-input>
+                </div>
+              </template>
+            </div>
+            <template if:true={sourceObject}>
+              <p class="slds-m-top_small slds-text-color_success">
+                Selected:
+                <b>{sourceObject}</b>
+              </p>
             </template>
-          </div>
-          <template if:true={sourceObject}>
-            <p class="slds-m-top_small slds-text-color_success">
-              Selected:
-              <b>{sourceObject}</b>
-            </p>
           </template>
         </template>
 
@@ -217,6 +237,8 @@
             <dd class="slds-dl_horizontal__detail">{eventSummary}</dd>
             <dt class="slds-dl_horizontal__label">Async Mode</dt>
             <dd class="slds-dl_horizontal__detail">{asyncMode}</dd>
+            <dt class="slds-dl_horizontal__label">Status</dt>
+            <dd class="slds-dl_horizontal__detail">{activeSummary}</dd>
             <dt class="slds-dl_horizontal__label">Retention</dt>
             <dd class="slds-dl_horizontal__detail">{retentionSummary}</dd>
           </dl>
@@ -249,7 +271,15 @@
     <!-- Footer buttons -->
     <template if:false={saved}>
       <div slot="footer" class="slds-grid slds-grid_align-spread">
-        <lightning-button label="Previous" onclick={handlePrevious} disabled={isFirstStep}></lightning-button>
+        <div>
+          <lightning-button
+            label="Previous"
+            onclick={handlePrevious}
+            disabled={isFirstStep}
+            class="slds-m-right_x-small"
+          ></lightning-button>
+          <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+        </div>
         <div>
           <template if:false={isLastStep}>
             <lightning-button
