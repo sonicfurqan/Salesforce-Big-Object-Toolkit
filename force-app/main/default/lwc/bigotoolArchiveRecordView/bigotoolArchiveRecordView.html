@@ -10,7 +10,7 @@
 
     <template if:true={record}>
       <template if:true={showRestore}>
-        <div class="slds-grid slds-grid_align-end slds-m-bottom_small">
+        <div class="slds-m-bottom_small">
           <lightning-button
             label="Restore"
             title="Restore this record to its original object"
@@ -25,28 +25,27 @@
         </div>
       </template>
 
-      <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
-        <div>
-          <p class="slds-text-title_caps slds-text-color_weak">Original Record Id</p>
-          <p class="slds-text-body_regular">{record.originalId}</p>
-        </div>
-        <div>
-          <p class="slds-text-title_caps slds-text-color_weak">Archived Date</p>
-          <p class="slds-text-body_regular">
-            <lightning-formatted-date-time
-              value={record.archivedDate}
-              year="numeric"
-              month="short"
-              day="2-digit"
-              hour="2-digit"
-              minute="2-digit"
-            ></lightning-formatted-date-time>
-          </p>
-        </div>
-      </div>
-
       <template if:true={hasFields}>
         <div class="slds-grid slds-wrap slds-gutters">
+          <div class="slds-col slds-size_1-of-2 slds-p-vertical_x-small">
+            <p class="slds-text-title_caps slds-text-color_weak">Original Record Id</p>
+
+            <lightning-formatted-text value={record.originalId}></lightning-formatted-text>
+          </div>
+          <div class="slds-col slds-size_1-of-2 slds-p-vertical_x-small">
+            <p class="slds-text-title_caps slds-text-color_weak">Archived Date</p>
+            <p class="slds-text-body_regular">
+              <lightning-formatted-date-time
+                value={record.archivedDate}
+                year="numeric"
+                month="short"
+                day="2-digit"
+                hour="2-digit"
+                minute="2-digit"
+              ></lightning-formatted-date-time>
+            </p>
+          </div>
+
           <template for:each={record.fields} for:item="f">
             <div key={f.key} class="slds-col slds-size_1-of-2 slds-p-vertical_x-small">
               <p class="slds-text-title_caps slds-text-color_weak slds-truncate" title={f.apiName}>{f.label}</p>

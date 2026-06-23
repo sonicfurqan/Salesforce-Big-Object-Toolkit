@@ -11,7 +11,17 @@
  *   }
  */
 public with sharing class BIGOTOOL_ChangeCapture {
+  /**
+   * Transaction-scoped kill switch. When a restore writes a record back to its
+   * source object, the Restore Profile can request that generated field-history
+   * automation is suppressed so the restore does not re-fire change logging.
+   */
+  public static Boolean bypass = false;
+
   public static void run(String objName, System.TriggerOperation op, Map<Id, SObject> oldMap, Map<Id, SObject> newMap) {
+    if (bypass) {
+      return;
+    }
     if (!BIGOTOOL_Toggles.loggingEnabled(objName)) {
       return;
     }

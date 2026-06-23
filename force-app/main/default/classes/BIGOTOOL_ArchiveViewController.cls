@@ -102,6 +102,10 @@ public without sharing class BIGOTOOL_ArchiveViewController {
     public String sourceObject;
     @AuraEnabled
     public String sourceObjectLabel;
+    @AuraEnabled
+    public Boolean skipped = false;
+    @AuraEnabled
+    public String outcome;
   }
 
   // ---------------------------------------------------------------------------
@@ -465,14 +469,18 @@ public without sharing class BIGOTOOL_ArchiveViewController {
 
     Archive_Config__c cfg = loadConfig(configId);
     String boApi = bigObjectApi(cfg);
+    RestoreSettings settings = resolveRestoreSettings(cfg);
 
-    Schema.SObjectType sourceType = Schema.getGlobalDescribe().get(cfg.Source_Object__c);
-    if (sourceType == null) {
-      throw new AuraHandledException('Source object ' + cfg.Source_Object__c + ' no longer exists.');
+    // The Restore Profile may redirect the restore into a different target
+    // object; default to the original source object.
+    String targetApi = String.isNotBlank(settings.targetObject) ? settings.targetObject : cfg.Source_Object__c;
+    Schema.SObjectType targetType = Schema.getGlobalDescribe().get(targetApi);
+    if (targetType == null) {
+      throw new AuraHandledException('Target object ' + targetApi + ' no longer exists.');
     }
-    Schema.DescribeSObjectResult sourceDescribe = sourceType.getDescribe();
-    if (!sourceDescribe.isCreateable()) {
-      throw new AuraHandledException('You do not have permission to create ' + cfg.Source_Object__c + ' records.');
+    Schema.DescribeSObjectResult targetDescribe = targetType.getDescribe();
+    if (!targetDescribe.isCreateable()) {
+      throw new AuraHandledException('You do not have permission to create ' + targetApi + ' records.');
     }
 
     String soql =
@@ -494,8 +502,8 @@ public without sharing class BIGOTOOL_ArchiveViewController {
     }
     Map<String, Object> values = mergeValues(rows[0]);
 
-    Map<String, Schema.SObjectField> fieldMap = sourceDescribe.fields.getMap();
-    SObject restored = sourceType.newSObject();
+    Map<String, Schema.SObjectField> fieldMap = targetDescribe.fields.getMap();
+    SObject restored = targetType.newSObject();
     Boolean anyValueSet = false;
 
     for (Archive_Field__c af : cfg.Archive_Fields__r) {
@@ -509,6 +517,14 @@ public without sharing class BIGOTOOL_ArchiveViewController {
       }
       Schema.DescribeFieldResult dfr = token.getDescribe();
       if (!dfr.isCreateable()) {
+        continue;
+      }
+      // State & Country picklists: writing both the integration-value text field
+      // (e.g. BillingState) and its ISO-code picklist sibling (BillingStateCode)
+      // triggers FIELD_INTEGRITY_EXCEPTION "Mismatched integration value and ISO
+      // code". When the code sibling exists and is present in the payload, skip
+      // the text field and let the platform derive it from the code.
+      if (shouldSkipForStateCountryPicklist(fieldApi, fieldMap, values)) {
         continue;
       }
       Object raw = values.get(fieldApi);
@@ -527,17 +543,127 @@ public without sharing class BIGOTOOL_ArchiveViewController {
       }
     }
 
+    // Owner reparenting: by default the running user owns the restored record;
+    // when the profile requests it, restore the archived OwnerId instead.
+    if (settings.reparentOwner && fieldMap.containsKey('ownerid') && values.get('OwnerId') != null) {
+      try {
+        restored.put('OwnerId', String.valueOf(values.get('OwnerId')));
+      } catch (Exception ignored) {
+        // Leave the running user as owner if the archived owner is invalid.
+      }
+    }
+
     if (!anyValueSet) {
       throw new AuraHandledException('No restorable field values were found for this archived record.');
     }
 
-    insert restored;
-
+    // Conflict handling: locate an existing record using the match field
+    // (defaults to the original record Id) and Skip / Overwrite / Clone per the
+    // Restore Profile.
+    SObject existing = findConflict(targetApi, settings.matchField, originalId, values);
     RestoreResult rr = new RestoreResult();
+    rr.sourceObject = targetApi;
+    rr.sourceObjectLabel = targetDescribe.getLabel();
+
+    if (existing != null && settings.onConflict == 'Skip') {
+      rr.skipped = true;
+      rr.outcome = 'Skipped';
+      rr.recordId = existing.Id;
+      return rr;
+    }
+
+    Boolean priorBypass = BIGOTOOL_ChangeCapture.bypass;
+    if (settings.bypassAutomation) {
+      BIGOTOOL_ChangeCapture.bypass = true;
+    }
+    try {
+      if (existing != null && settings.onConflict == 'Overwrite') {
+        restored.put('Id', existing.Id);
+        update restored;
+        rr.outcome = 'Overwritten';
+      } else {
+        // Insert path for both no-conflict and the Clone strategy.
+        insert restored;
+        rr.outcome = existing != null ? 'Cloned' : 'Restored';
+      }
+    } catch (Exception e) {
+      throw new AuraHandledException('Failed to restore record: ' + e.getMessage());
+    } finally {
+      BIGOTOOL_ChangeCapture.bypass = priorBypass;
+    }
+
     rr.recordId = restored.Id;
-    rr.sourceObject = cfg.Source_Object__c;
-    rr.sourceObjectLabel = sourceDescribe.getLabel();
     return rr;
+  }
+
+  /** Resolved restore behaviour with sensible defaults when no profile exists. */
+  private class RestoreSettings {
+    String targetObject;
+    String matchField;
+    String onConflict = 'Skip';
+    Boolean reparentOwner = false;
+    Boolean bypassAutomation = false;
+  }
+
+  /** Reads the first Restore Profile on the config and applies defaults. */
+  private static RestoreSettings resolveRestoreSettings(Archive_Config__c cfg) {
+    RestoreSettings s = new RestoreSettings();
+    if (cfg.Restore_Profiles__r != null && !cfg.Restore_Profiles__r.isEmpty()) {
+      Restore_Profile__c p = cfg.Restore_Profiles__r[0];
+      s.targetObject = p.Target_Object__c;
+      s.matchField = p.Match_Field__c;
+      if (String.isNotBlank(p.On_Conflict__c)) {
+        s.onConflict = p.On_Conflict__c;
+      }
+      s.reparentOwner = p.Reparent_Owner__c == true;
+      s.bypassAutomation = p.Bypass_Automation__c == true;
+    }
+    return s;
+  }
+
+  /**
+   * True when {@code fieldApi} is a State/Country integration-value text field
+   * whose ISO-code picklist sibling ({@code fieldApi + 'Code'}) exists on the
+   * target object and is present in the archived payload. Setting both halves
+   * causes a mismatch error, so the text half is skipped in favour of the code.
+   */
+  private static Boolean shouldSkipForStateCountryPicklist(
+    String fieldApi,
+    Map<String, Schema.SObjectField> fieldMap,
+    Map<String, Object> values
+  ) {
+    String codeApi = fieldApi + 'Code';
+    Schema.SObjectField codeToken = fieldMap.get(codeApi.toLowerCase());
+    if (codeToken == null) {
+      return false;
+    }
+    if (codeToken.getDescribe().getType() != Schema.DisplayType.PICKLIST) {
+      return false;
+    }
+    // Only skip when the code value is actually available to carry the data.
+    return values.containsKey(codeApi) && values.get(codeApi) != null;
+  }
+
+  /** Finds a pre-existing target record for conflict handling, or null. */
+  private static SObject findConflict(
+    String targetApi,
+    String matchField,
+    String originalId,
+    Map<String, Object> values
+  ) {
+    String field = String.isBlank(matchField) ? 'Id' : matchField.trim();
+    Object matchValue = field.equalsIgnoreCase('Id') ? (Object) originalId : values.get(field);
+    if (matchValue == null) {
+      return null;
+    }
+    String q = 'SELECT Id FROM ' + targetApi + ' WHERE ' + field + ' = :matchValue LIMIT 1';
+    try {
+      List<SObject> found = Database.query(q);
+      return found.isEmpty() ? null : found[0];
+    } catch (Exception e) {
+      // An invalid match field should not break the restore; treat as no match.
+      return null;
+    }
   }
 
   /** Coerces a JSON-deserialized value back to the native type of a source field. */
@@ -703,6 +829,12 @@ public without sharing class BIGOTOOL_ArchiveViewController {
           SELECT Field_API_Name__c, Field_Label__c, Field_Type__c, Is_List_View__c
           FROM Archive_Fields__r
           ORDER BY Field_API_Name__c ASC
+        ),
+        (
+          SELECT Id, Name, Target_Object__c, Match_Field__c, On_Conflict__c, Reparent_Owner__c, Bypass_Automation__c
+          FROM Restore_Profiles__r
+          ORDER BY CreatedDate ASC
+          LIMIT 1
         )
       FROM Archive_Config__c
       WHERE Id = :configId

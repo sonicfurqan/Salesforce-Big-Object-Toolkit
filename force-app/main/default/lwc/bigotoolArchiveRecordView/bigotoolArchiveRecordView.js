@@ -71,10 +71,26 @@ export default class BigotoolArchiveRecordView extends NavigationMixin(Lightning
       });
       this.restoredRecordId = result.recordId;
       this.restoredObjectLabel = result.sourceObjectLabel || result.sourceObject;
+
+      if (result.skipped) {
+        // A matching record already existed and the Restore Profile is set to
+        // Skip on conflict, so nothing was written.
+        this.dispatchEvent(
+          new ShowToastEvent({
+            title: "Restore skipped",
+            message: `A matching record already exists in ${this.restoredObjectLabel}; it was left unchanged.`,
+            variant: "info"
+          })
+        );
+        this.showNavigatePrompt = !!this.restoredRecordId;
+        return;
+      }
+
+      const outcome = result.outcome === "Overwritten" ? "updated" : "restored";
       this.dispatchEvent(
         new ShowToastEvent({
           title: "Record restored",
-          message: `The record was restored to ${this.restoredObjectLabel}.`,
+          message: `The record was ${outcome} in ${this.restoredObjectLabel}.`,
           variant: "success"
         })
       );
