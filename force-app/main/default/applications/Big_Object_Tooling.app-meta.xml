@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Unified app to configure, monitor, and browse archived data and field history captured in Big Objects.</description>
+    <formFactors>Large</formFactors>
+    <label>Big Object Tooling</label>
+    <navType>Standard</navType>
+    <tabs>Archive_Config__c</tabs>
+    <tabs>Field_Log_Config__c</tabs>
+    <tabs>Restore_Profile__c</tabs>
+    <uiType>Lightning</uiType>
+</CustomApplication>

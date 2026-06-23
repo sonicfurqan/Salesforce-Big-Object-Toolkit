@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Read-only access to archived records. Visibility is further scoped per object by BIGOTOOL_Settings__c: no config = all archives visible; config present = only listed archive objects. Generated archive Big Objects are appended by the generator.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>BIGOTOOL Archive Viewer</label>
+    <applicationVisibilities>
+        <application>Big_Object_Tooling</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+    <objectPermissions>
+        <allowCreate>false</allowCreate>
+        <allowDelete>false</allowDelete>
+        <allowEdit>false</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>false</modifyAllRecords>
+        <object>Archive_Job_Log__b</object>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+    <fieldPermissions>
+        <field>Archive_Job_Log__b.Status__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Job_Log__b.RecordsProcessed__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Job_Log__b.RecordsFailed__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Job_Log__b.ErrorSummary__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Job_Log__b.AsyncJobId__c</field>
+        <editable>false</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+</PermissionSet>

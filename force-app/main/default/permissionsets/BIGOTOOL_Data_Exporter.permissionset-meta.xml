@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Add-on permission set granting CSV export of history/archive records (bulk, millions of rows). Stack on a viewer set. Includes the Big Object Tooling app.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>BIGOTOOL Data Exporter</label>
+    <applicationVisibilities>
+        <application>Big_Object_Tooling</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>BIGOTOOL_Can_Export</name>
+    </customPermissions>
+</PermissionSet>
