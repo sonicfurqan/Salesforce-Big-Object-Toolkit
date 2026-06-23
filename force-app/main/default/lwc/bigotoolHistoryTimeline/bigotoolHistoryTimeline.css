@@ -1,0 +1,8 @@
+.slds-table_bordered td {
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.slds-timeline__item_expandable {
+  border-left: none;
+}

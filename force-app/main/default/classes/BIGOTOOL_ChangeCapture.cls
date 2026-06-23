@@ -1,0 +1,37 @@
+/**
+ * Reusable field-history trigger handler. Generated per-object triggers delegate
+ * here, passing the object name and trigger context. The handler gates on the
+ * runtime toggles, diffs the change, and routes the resulting rows to the Big
+ * Object using the configured async mode.
+ *
+ *   trigger AccountFieldLogTrigger on Account
+ *       (after insert, after update, after delete, after undelete) {
+ *       BIGOTOOL_ChangeCapture.run('Account', Trigger.operationType,
+ *                                  Trigger.oldMap, Trigger.newMap);
+ *   }
+ */
+public with sharing class BIGOTOOL_ChangeCapture {
+  public static void run(String objName, System.TriggerOperation op, Map<Id, SObject> oldMap, Map<Id, SObject> newMap) {
+    if (!BIGOTOOL_Toggles.loggingEnabled(objName)) {
+      return;
+    }
+
+    List<FieldChangeLog__b> logs = BIGOTOOL_Differ.diff(objName, op, oldMap, newMap);
+    if (logs.isEmpty()) {
+      return;
+    }
+
+    switch on BIGOTOOL_Toggles.asyncMode(objName) {
+      when 'Queueable' {
+        System.enqueueJob(new BIGOTOOL_LogFlushQueueable(logs));
+      }
+      when 'Synchronous' {
+        BIGOTOOL_LogWriter.write(logs);
+      }
+      when else {
+        // PlatformEvent (default): decouple the Big Object write from this txn.
+        BIGOTOOL_EventPublisher.publish(logs);
+      }
+    }
+  }
+}

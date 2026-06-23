@@ -1,12 +1,17 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8" ?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Read-only access to field change history records (FieldChangeLog Big Object) and the Big Object Tooling app.</description>
+    <description
+  >Read-only access to field change history records (FieldChangeLog Big Object) and the Big Object Tooling app.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>BIGOTOOL History Viewer</label>
     <applicationVisibilities>
         <application>Big_Object_Tooling</application>
         <visible>true</visible>
     </applicationVisibilities>
+    <classAccesses>
+        <apexClass>BIGOTOOL_HistoryController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <objectPermissions>
         <allowCreate>false</allowCreate>
         <allowDelete>false</allowDelete>

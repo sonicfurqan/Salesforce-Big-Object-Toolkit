@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>67.0</apiVersion>
+    <isExposed>true</isExposed>
+    <masterLabel>Field History Timeline</masterLabel>
+    <description
+  >Displays field change history captured in Big Objects for the current record as a filterable, paginated timeline with permission-gated CSV export.</description>
+    <targets>
+        <target>lightning__RecordPage</target>
+        <target>lightning__AppPage</target>
+    </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__RecordPage">
+            <property
+        name="title"
+        type="String"
+        label="Card Title"
+        default="Field History"
+        description="Heading shown on the component card."
+      />
+            <property
+        name="pageSize"
+        type="Integer"
+        label="Page Size"
+        default="50"
+        min="1"
+        max="200"
+        description="Number of change rows fetched per page (1-200)."
+      />
+        </targetConfig>
+        <targetConfig targets="lightning__AppPage">
+            <property
+        name="recordId"
+        type="String"
+        label="Record Id"
+        description="Record whose field history is displayed."
+      />
+            <property name="title" type="String" label="Card Title" default="Field History" />
+            <property name="pageSize" type="Integer" label="Page Size" default="50" min="1" max="200" />
+        </targetConfig>
+    </targetConfigs>
+</LightningComponentBundle>

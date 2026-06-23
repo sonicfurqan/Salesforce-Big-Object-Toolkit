@@ -1,0 +1,11 @@
+.code-block {
+  white-space: pre;
+  max-height: 16rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}
+
+.instruction-block {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}

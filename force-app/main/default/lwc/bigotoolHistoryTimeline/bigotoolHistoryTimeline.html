@@ -1,0 +1,192 @@
+<template>
+  <lightning-card icon-name="standard:record_lookup">
+    <span slot="title">{title}</span>
+    <div slot="actions" class="slds-grid slds-grid_vertical-align-center slds-gutters_x-small">
+      <lightning-button-group class="slds-m-right_x-small">
+        <lightning-button
+          label="Timeline"
+          icon-name="utility:timeline"
+          variant={timelineButtonVariant}
+          value="timeline"
+          onclick={handleViewToggle}
+        ></lightning-button>
+        <lightning-button
+          label="Table"
+          icon-name="utility:table"
+          variant={tableButtonVariant}
+          value="table"
+          onclick={handleViewToggle}
+        ></lightning-button>
+      </lightning-button-group>
+      <template if:true={showExport}>
+        <lightning-button
+          label="Export CSV"
+          icon-name="utility:download"
+          onclick={handleExport}
+          variant="neutral"
+          class="slds-m-right_x-small"
+        ></lightning-button>
+      </template>
+      <lightning-button-icon
+        icon-name="utility:refresh"
+        alternative-text="Refresh"
+        title="Refresh"
+        onclick={handleRefresh}
+      ></lightning-button-icon>
+    </div>
+
+    <div class="slds-card__body slds-card__body_inner">
+      <!-- Filters -->
+      <div class="slds-grid slds-gutters slds-grid_vertical-align-end slds-m-bottom_small slds-wrap">
+        <div class="slds-col slds-size_1-of-3">
+          <lightning-combobox
+            label="Field"
+            value={fieldFilter}
+            options={fieldFilterOptions}
+            onchange={handleFieldFilter}
+            variant="label-stacked"
+          ></lightning-combobox>
+        </div>
+        <div class="slds-col slds-size_1-of-3">
+          <lightning-combobox
+            label="Change type"
+            value={changeTypeFilter}
+            options={changeTypeOptions}
+            onchange={handleChangeTypeFilter}
+            variant="label-stacked"
+          ></lightning-combobox>
+        </div>
+        <div class="slds-col slds-size_1-of-3">
+          <lightning-combobox
+            label="Changed by"
+            value={userFilter}
+            options={userOptions}
+            onchange={handleUserFilter}
+            variant="label-stacked"
+          ></lightning-combobox>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <template if:true={error}>
+        <div class="slds-box slds-theme_error slds-theme_alert-texture slds-m-bottom_small" role="alert">{error}</div>
+      </template>
+
+      <!-- Loading -->
+      <template if:true={loading}>
+        <div class="slds-align_absolute-center slds-p-vertical_medium">
+          <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+        </div>
+      </template>
+
+      <!-- Empty -->
+      <template if:true={isEmpty}>
+        <div class="slds-illustration slds-illustration_small slds-p-around_medium slds-text-align_center">
+          <p class="slds-text-body_regular slds-text-color_weak">
+            No field change history recorded for this record yet.
+          </p>
+        </div>
+      </template>
+
+      <!-- Timeline view -->
+      <template if:true={isTimelineView}>
+        <template if:true={hasEntries}>
+          <ul class="slds-timeline">
+            <template for:each={entries} for:item="entry">
+              <li key={entry.key} class="slds-timeline__item_expandable slds-timeline__item_call slds-p-bottom_small">
+                <div class="slds-media">
+                  <div class="slds-media__figure">
+                    <span class="slds-icon_container slds-icon-standard-record-update slds-timeline__icon">
+                      <lightning-icon icon-name="standard:record_update" size="small"></lightning-icon>
+                    </span>
+                  </div>
+                  <div class="slds-media__body">
+                    <div class="slds-grid slds-grid_align-spread slds-timeline__trigger">
+                      <div class="slds-grid slds-grid_vertical-align-center slds-truncate_container_75">
+                        <span class="slds-badge slds-m-right_x-small">{entry.changeType}</span>
+                        <span class="slds-text-title_bold">{entry.changedByName}</span>
+                      </div>
+                      <div class="slds-timeline__actions slds-timeline__actions_inline">
+                        <p class="slds-timeline__date">
+                          <lightning-formatted-date-time
+                            value={entry.changedDateTime}
+                            year="numeric"
+                            month="short"
+                            day="2-digit"
+                            hour="2-digit"
+                            minute="2-digit"
+                          ></lightning-formatted-date-time>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="slds-box slds-box_xx-small slds-m-top_xx-small">
+                      <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-no-row-hover">
+                        <thead>
+                          <tr class="slds-line-height_reset">
+                            <th class="slds-text-title_caps" scope="col">Field</th>
+                            <th class="slds-text-title_caps" scope="col">Old value</th>
+                            <th class="slds-text-title_caps" scope="col">New value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <template for:each={entry.changes} for:item="chg">
+                            <tr key={chg.key} class="slds-hint-parent">
+                              <td>
+                                <span class="slds-text-body_regular">{chg.fieldLabel}</span>
+                                <template if:true={chg.masked}>
+                                  <span
+                                    class="slds-badge slds-theme_warning slds-m-left_xx-small"
+                                    title="This field is masked for privacy"
+                                  >
+                                    Masked
+                                  </span>
+                                </template>
+                              </td>
+                              <td><span class="slds-text-color_weak">{chg.oldValue}</span></td>
+                              <td><span class="slds-text-color_default">{chg.newValue}</span></td>
+                            </tr>
+                          </template>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            </template>
+          </ul>
+        </template>
+      </template>
+
+      <!-- Table view (standard Salesforce datatable) -->
+      <template if:true={isTableView}>
+        <template if:true={hasEntries}>
+          <lightning-datatable
+            key-field="id"
+            data={tableRows}
+            columns={tableColumns}
+            hide-checkbox-column
+            column-widths-mode="auto"
+            resize-column-disabled
+          ></lightning-datatable>
+        </template>
+      </template>
+
+      <!-- Footer: count + load more (both views) -->
+      <template if:true={hasEntries}>
+        <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-top_small">
+          <span class="slds-text-body_small slds-text-color_weak">{totalLoadedLabel}</span>
+          <template if:true={showLoadMore}>
+            <lightning-button
+              label="Load more"
+              icon-name="utility:chevrondown"
+              icon-position="right"
+              onclick={loadMore}
+              variant="brand-outline"
+            ></lightning-button>
+          </template>
+        </div>
+      </template>
+    </div>
+  </lightning-card>
+</template>

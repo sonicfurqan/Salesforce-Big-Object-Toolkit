@@ -8,6 +8,10 @@
         <application>Big_Object_Tooling</application>
         <visible>true</visible>
     </applicationVisibilities>
+    <classAccesses>
+        <apexClass>BIGOTOOL_HistoryController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <tabSettings>
         <tab>Archive_Config__c</tab>
         <visibility>Visible</visibility>

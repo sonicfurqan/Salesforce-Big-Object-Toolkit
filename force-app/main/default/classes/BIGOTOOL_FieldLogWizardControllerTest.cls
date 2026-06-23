@@ -289,4 +289,103 @@ private class BIGOTOOL_FieldLogWizardControllerTest {
     }
     System.assert(threw, 'User without Can_Configure should be rejected');
   }
+
+  @IsTest
+  static void generateTriggerCodeBuildsCodeAndSetsFlag() {
+    BIGOTOOL_FieldLogWizardController.ConfigInput cfgIn = buildInput();
+    Id configId;
+    BIGOTOOL_FieldLogWizardController.TriggerCodeResult res;
+    System.runAs(configuratorUser()) {
+      configId = saveCfg(cfgIn);
+      Test.startTest();
+      res = BIGOTOOL_FieldLogWizardController.generateTriggerCode(configId);
+      Test.stopTest();
+    }
+
+    System.assertNotEquals(null, res, 'Result should be returned');
+    System.assertEquals('Account', res.objectApiName);
+    System.assertEquals('AccountFieldLogTrigger', res.triggerName);
+    System.assert(
+      res.triggerBody.contains('trigger AccountFieldLogTrigger on Account'),
+      'Trigger body should declare the trigger'
+    );
+    System.assert(
+      res.triggerBody.contains('BIGOTOOL_ChangeCapture.run'),
+      'Trigger body should delegate to the handler'
+    );
+    System.assert(
+      res.events.contains('after insert') && res.events.contains('after update'),
+      'Events should reflect selected operations'
+    );
+    System.assert(String.isNotBlank(res.instructions), 'Instructions should be provided');
+
+    Field_Log_Config__c cfg = [
+      SELECT Trigger_Generated__c
+      FROM Field_Log_Config__c
+      WHERE Id = :configId
+    ];
+    System.assertEquals(true, cfg.Trigger_Generated__c, 'Trigger Generated flag should be set');
+  }
+
+  @IsTest
+  static void generateTriggerNameStripsCustomSuffix() {
+    System.assertEquals('My_ObjectFieldLogTrigger', BIGOTOOL_FieldLogWizardController.buildTriggerName('My_Object__c'));
+  }
+
+  @IsTest
+  static void generateTriggerCodeRequiresId() {
+    Boolean threw = false;
+    System.runAs(configuratorUser()) {
+      try {
+        BIGOTOOL_FieldLogWizardController.generateTriggerCode(null);
+      } catch (Exception e) {
+        threw = true;
+      }
+    }
+    System.assert(threw, 'Null config id should throw');
+  }
+
+  @IsTest
+  static void getTriggerCodeStatusReflectsGenerationWithoutSideEffect() {
+    BIGOTOOL_FieldLogWizardController.ConfigInput cfgIn = buildInput();
+    Id configId;
+    BIGOTOOL_FieldLogWizardController.TriggerCodeResult before;
+    BIGOTOOL_FieldLogWizardController.TriggerCodeResult after;
+    System.runAs(configuratorUser()) {
+      configId = saveCfg(cfgIn);
+
+      Test.startTest();
+      before = BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(configId);
+      BIGOTOOL_FieldLogWizardController.generateTriggerCode(configId);
+      after = BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(configId);
+      Test.stopTest();
+    }
+
+    System.assertEquals(false, before.alreadyGenerated, 'Status should be not-generated before generation');
+    System.assert(
+      before.triggerBody.contains('trigger AccountFieldLogTrigger on Account'),
+      'Preview should still include the trigger body'
+    );
+    System.assertEquals(true, after.alreadyGenerated, 'Status should reflect generation afterward');
+
+    Field_Log_Config__c cfg = [
+      SELECT Trigger_Generated__c
+      FROM Field_Log_Config__c
+      WHERE Id = :configId
+    ];
+    System.assertEquals(true, cfg.Trigger_Generated__c, 'Status query alone must not have changed the flag');
+  }
+
+  @IsTest
+  static void getTriggerCodeStatusRequiresId() {
+    Boolean threw = false;
+    System.runAs(configuratorUser()) {
+      try {
+        BIGOTOOL_FieldLogWizardController.getTriggerCodeStatus(null);
+      } catch (Exception e) {
+        threw = true;
+      }
+    }
+    System.assert(threw, 'Null config id should throw');
+  }
 }
