@@ -13,6 +13,10 @@
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
+        <apexClass>BIGOTOOL_ArchiveViewController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>BIGOTOOL_HistoryController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -22,6 +26,30 @@
     </classAccesses>
     <classAccesses>
         <apexClass>BIGOTOOL_FieldLogWizardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_GenerationController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_MetadataGenerator</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_ArchiveBatch</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_ArchiveSchedulable</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_SchedulerController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>MetadataService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
     <tabSettings>
@@ -82,6 +110,15 @@
         <allowRead>true</allowRead>
         <modifyAllRecords>true</modifyAllRecords>
         <object>Restore_Profile__c</object>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+    <objectPermissions>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <object>Archive_Field__c</object>
         <viewAllRecords>true</viewAllRecords>
     </objectPermissions>
     <objectPermissions>
@@ -149,6 +186,26 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>Archive_Config__c.Schedule_Cron__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Config__c.Schedule_Paused__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Config__c.Last_Archive_Run__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Config__c.Total_Records_Archived__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Config__c.Last_Run_Status__c</field>
         <editable>true</editable>
         <readable>true</readable>
     </fieldPermissions>
@@ -249,6 +306,21 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>Restore_Profile__c.Bypass_Automation__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Field__c.Field_Label__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Field__c.Field_Type__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>Archive_Field__c.Is_List_View__c</field>
         <editable>true</editable>
         <readable>true</readable>
     </fieldPermissions>

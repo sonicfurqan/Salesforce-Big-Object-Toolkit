@@ -92,11 +92,7 @@ private class BIGOTOOL_DashboardControllerTest {
       BIGOTOOL_DashboardController.summarizeJobs(new List<Archive_Job_Log__b>()).totalRuns,
       'Empty input yields zero runs.'
     );
-    System.assertEquals(
-      0,
-      BIGOTOOL_DashboardController.summarizeJobs(null).totalRuns,
-      'Null input yields zero runs.'
-    );
+    System.assertEquals(0, BIGOTOOL_DashboardController.summarizeJobs(null).totalRuns, 'Null input yields zero runs.');
   }
 
   @IsTest
@@ -117,5 +113,82 @@ private class BIGOTOOL_DashboardControllerTest {
     System.assertEquals(false, data.toggles.loggingEnabled, 'Logging off.');
     System.assertEquals(true, data.toggles.archivingEnabled, 'Archiving on.');
     System.assertEquals(true, data.toggles.debugMode, 'Debug on.');
+  }
+
+  @IsTest
+  static void getOrgSettings_returnsDefaults() {
+    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
+    cs.SetupOwnerId = UserInfo.getOrganizationId();
+    cs.Master_Switch__c = true;
+    upsert cs;
+
+    Test.startTest();
+    BIGOTOOL_DashboardController.OrgSettings os = BIGOTOOL_DashboardController.getOrgSettings();
+    Test.stopTest();
+    System.assertNotEquals(null, os, 'Org settings should not be null.');
+    System.assertEquals(true, os.masterSwitch, 'Reflects the persisted master switch.');
+  }
+
+  @IsTest
+  static void saveOrgSettings_withoutPermission_throws() {
+    Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+    User u = new User(
+      FirstName = 'No',
+      LastName = 'Perm',
+      Email = 'bigotool.noperm@example.com',
+      Username = 'bigotool.noperm.' + Crypto.getRandomInteger() + '@example.com.test',
+      Alias = 'np',
+      TimeZoneSidKey = 'America/Los_Angeles',
+      LocaleSidKey = 'en_US',
+      EmailEncodingKey = 'UTF-8',
+      LanguageLocaleKey = 'en_US',
+      ProfileId = p.Id
+    );
+    insert u;
+
+    Boolean threw = false;
+    System.runAs(u) {
+      try {
+        BIGOTOOL_DashboardController.saveOrgSettings(true, true, true, false, 5);
+      } catch (Exception e) {
+        threw = true;
+      }
+    }
+    System.assert(threw, 'Save without BIGOTOOL_Can_Configure should throw.');
+  }
+
+  @IsTest
+  static void saveOrgSettings_withPermission_persists() {
+    Profile p = [SELECT Id FROM Profile WHERE Name = 'System Administrator' LIMIT 1];
+    User u = new User(
+      FirstName = 'Cfg',
+      LastName = 'User',
+      Email = 'bigotool.cfguser@example.com',
+      Username = 'bigotool.cfguser.' + Crypto.getRandomInteger() + '@example.com.test',
+      Alias = 'cfg',
+      TimeZoneSidKey = 'America/Los_Angeles',
+      LocaleSidKey = 'en_US',
+      EmailEncodingKey = 'UTF-8',
+      LanguageLocaleKey = 'en_US',
+      ProfileId = p.Id
+    );
+    insert u;
+    PermissionSet ps = [SELECT Id FROM PermissionSet WHERE Name = 'BIGOTOOL_Configurator' LIMIT 1];
+    insert new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = ps.Id);
+
+    System.runAs(u) {
+      Test.startTest();
+      BIGOTOOL_DashboardController.OrgSettings os = BIGOTOOL_DashboardController.saveOrgSettings(
+        true,
+        false,
+        false,
+        true,
+        4
+      );
+      Test.stopTest();
+      System.assertEquals(false, os.archivingEnabled, 'Archiving saved as off.');
+      System.assertEquals(true, os.debugMode, 'Debug saved as on.');
+      System.assertEquals(4, os.maxBatchConcurrency, 'Concurrency persisted.');
+    }
   }
 }

@@ -1,0 +1,1 @@
+﻿<apex:page contentType="application/json" showHeader="false" sidebar="false" standardStylesheets="false" applyHtmlTag="false" applyBodyTag="false" cache="false">{"sessionId":"{!$Api.Session_ID}"}</apex:page>

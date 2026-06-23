@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Schedule_Paused__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description
+  >True when the archive schedule has been intentionally paused from the scheduler component. Distinguishes a paused schedule from one that was never created.</description>
+    <externalId>false</externalId>
+    <label>Schedule Paused</label>
+    <trackTrending>false</trackTrending>
+    <type>Checkbox</type>
+</CustomField>

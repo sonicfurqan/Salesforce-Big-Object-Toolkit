@@ -1,0 +1,256 @@
+<template>
+  <div class="bigotool-archive-container">
+    <!-- Header Section -->
+    <div class="bigotool-header">
+      <!-- Left-aligned Metadata -->
+      <div class="bigotool-header-left">
+        <div class="bigotool-metadata">
+          <lightning-icon icon-name="standard:entity" size="medium" class="bigotool-metadata-icon"></lightning-icon>
+          <div class="bigotool-metadata-info">
+            <p class="bigotool-label">{objectName}</p>
+            <p class="bigotool-status">{rowCountLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right-aligned Global Actions -->
+      <div class="bigotool-header-right">
+        <lightning-button
+          label="Export"
+          icon-name="utility:download"
+          variant="border"
+          class="slds-m-right_small"
+          onclick={handleExportClick}
+          disabled={isExporting}
+        ></lightning-button>
+        <lightning-button
+          label="Refresh"
+          icon-name="utility:refresh"
+          variant="border"
+          onclick={handleRefresh}
+        ></lightning-button>
+        <lightning-button-icon
+          icon-name="utility:filter"
+          alternative-text="Toggle Filters"
+          title="Toggle Filters"
+          onclick={handleToggleFilters}
+          class={showFiltersClass}
+        ></lightning-button-icon>
+      </div>
+    </div>
+
+    <!-- Error Message -->
+    <template if:true={error}>
+      <div class="slds-text-color_error slds-p-around_small slds-m-bottom_small">{error}</div>
+    </template>
+
+    <!-- Split View Container -->
+    <div class="bigotool-split-view">
+      <!-- Data Table Section (Left - ~75%) -->
+      <div class="bigotool-data-section">
+        <template if:true={hasColumns}>
+          <lightning-datatable
+            key-field="rowKey"
+            data={rows}
+            columns={columns}
+            hide-checkbox-column
+            onrowaction={handleRowAction}
+            class="bigotool-datatable"
+          ></lightning-datatable>
+
+          <template if:true={hasMore}>
+            <div class="slds-align_absolute-center slds-p-vertical_small">
+              <lightning-button label="Load more" onclick={handleLoadMore} disabled={isLoading}></lightning-button>
+            </div>
+          </template>
+        </template>
+
+        <template if:true={hasColumns}>
+          <template if:false={hasRows}>
+            <template if:false={isLoading}>
+              <div class="slds-illustration slds-illustration_small slds-p-around_medium">
+                <p class="slds-text-body_regular slds-text-color_weak">No archived records found.</p>
+              </div>
+            </template>
+          </template>
+        </template>
+
+        <template if:false={hasColumns}>
+          <template if:false={isLoading}>
+            <div class="slds-illustration slds-illustration_small slds-p-around_medium">
+              <p class="slds-text-body_regular slds-text-color_weak">Preparing columns...</p>
+            </div>
+          </template>
+        </template>
+
+        <template if:true={isLoading}>
+          <div class="slds-align_absolute-center slds-p-vertical_medium">
+            <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+          </div>
+        </template>
+      </div>
+
+      <!-- Filters Sidebar (Right - ~25%) -->
+      <template if:true={showFilters}>
+        <div class="bigotool-filters-sidebar">
+          <!-- Sidebar Header -->
+          <div class="bigotool-filters-header">
+            <h3 class="bigotool-filters-title">Filters</h3>
+            <lightning-button-icon
+              icon-name="utility:close"
+              alternative-text="Close Filters"
+              title="Close"
+              onclick={handleToggleFilters}
+              class="bigotool-filters-close"
+            ></lightning-button-icon>
+          </div>
+
+          <!-- Filter Options -->
+          <div class="bigotool-filters-content">
+            <div class="slds-form slds-form_stacked">
+              <div class="slds-form-element slds-m-bottom_small">
+                <lightning-input
+                  type="text"
+                  label="Original Record Id"
+                  value={originalIdFilter}
+                  placeholder="e.g. 001..."
+                  onchange={handleOriginalIdChange}
+                ></lightning-input>
+              </div>
+
+              <div class="slds-form-element slds-m-bottom_small">
+                <lightning-input
+                  type="datetime"
+                  label="Archived From"
+                  value={fromDate}
+                  onchange={handleFromDateChange}
+                ></lightning-input>
+              </div>
+
+              <div class="slds-form-element slds-m-bottom_small">
+                <lightning-input
+                  type="datetime"
+                  label="Archived To"
+                  value={toDate}
+                  onchange={handleToDateChange}
+                ></lightning-input>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filter Actions -->
+          <div class="bigotool-filters-actions">
+            <lightning-button
+              label="Apply"
+              variant="brand"
+              class="slds-m-right_x-small"
+              onclick={handleApplyFilters}
+            ></lightning-button>
+            <lightning-button label="Reset" onclick={handleClearFilters}></lightning-button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Dynamic archived record viewer -->
+  <template if:true={showRecordModal}>
+    <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
+      <div class="slds-modal__container">
+        <header class="slds-modal__header">
+          <button
+            class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+            title="Close"
+            onclick={closeRecordModal}
+          >
+            <lightning-icon
+              icon-name="utility:close"
+              alternative-text="Close"
+              variant="inverse"
+              size="small"
+            ></lightning-icon>
+          </button>
+          <h2 class="slds-modal__title slds-hyphenate">Archived Record</h2>
+        </header>
+        <div class="slds-modal__content slds-p-around_medium bigotool-modal-body">
+          <c-bigotool-archive-record-view
+            config-id={effectiveConfigId}
+            original-id={selectedOriginalId}
+            archived-date={selectedArchivedDate}
+          ></c-bigotool-archive-record-view>
+        </div>
+        <footer class="slds-modal__footer">
+          <lightning-button label="Close" onclick={closeRecordModal}></lightning-button>
+        </footer>
+      </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+  </template>
+
+  <!-- Export choice modal -->
+  <template if:true={showExportModal}>
+    <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
+      <div class="slds-modal__container">
+        <header class="slds-modal__header">
+          <button
+            class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+            title="Close"
+            onclick={closeExportModal}
+          >
+            <lightning-icon
+              icon-name="utility:close"
+              alternative-text="Close"
+              variant="inverse"
+              size="small"
+            ></lightning-icon>
+          </button>
+          <h2 class="slds-modal__title slds-hyphenate">Export Archived Data</h2>
+        </header>
+        <div class="slds-modal__content slds-p-around_medium">
+          <template if:true={isExporting}>
+            <div class="slds-align_absolute-center slds-p-vertical_medium">
+              <lightning-spinner alternative-text="Exporting" size="small"></lightning-spinner>
+            </div>
+          </template>
+          <template if:false={isExporting}>
+            <p class="slds-m-bottom_small">Choose what to export to CSV:</p>
+            <ul class="slds-list_dotted">
+              <li>
+                <strong>Loaded data</strong>
+                — the {rowCountLabel} currently shown in the grid.
+              </li>
+              <li>
+                <strong>Full archive</strong>
+                — every archived record matching the current filters.
+                <template if:false={canExportData}>
+                  <span class="slds-text-color_error">(requires export permission)</span>
+                </template>
+              </li>
+            </ul>
+          </template>
+        </div>
+        <footer class="slds-modal__footer">
+          <lightning-button
+            label="Cancel"
+            onclick={closeExportModal}
+            class="slds-m-right_x-small"
+            disabled={isExporting}
+          ></lightning-button>
+          <lightning-button
+            label="Export loaded data"
+            onclick={handleExportLoaded}
+            class="slds-m-right_x-small"
+            disabled={isExporting}
+          ></lightning-button>
+          <lightning-button
+            label="Export full archive"
+            variant="brand"
+            onclick={handleExportFull}
+            disabled={exportFullDisabled}
+          ></lightning-button>
+        </footer>
+      </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+  </template>
+</template>

@@ -20,6 +20,17 @@ public with sharing class BIGOTOOL_Toggles {
   }
 
   /**
+   * True when the global Master Switch and the Archiving toggle both allow
+   * archiving to run. Defaults to enabled when no custom setting row exists.
+   */
+  public static Boolean archivingEnabled() {
+    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getInstance();
+    Boolean masterOn = cs == null || cs.Master_Switch__c != false;
+    Boolean archiveOn = cs == null || cs.Archiving_Enabled__c != false;
+    return masterOn && archiveOn;
+  }
+
+  /**
    * Async write mode for the object; defaults to PlatformEvent when unset.
    */
   public static String asyncMode(String objName) {

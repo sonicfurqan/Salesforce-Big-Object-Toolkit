@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Read-only access to archived records. Visibility is further scoped per object by BIGOTOOL_Settings__c: no config = all archives visible; config present = only listed archive objects. Generated archive Big Objects are appended by the generator.</description>
+    <description>Read-only access to archived records and the BIGOTOOL dashboard. Visibility of each generated archive Big Object is controlled by assigning the dedicated BIGOTOOL_Archive_&lt;Object&gt; permission set created by the generation engine.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>BIGOTOOL Archive Viewer</label>
     <applicationVisibilities>
@@ -9,6 +9,10 @@
     </applicationVisibilities>
     <classAccesses>
         <apexClass>BIGOTOOL_DashboardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_ArchiveViewController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
     <tabSettings>

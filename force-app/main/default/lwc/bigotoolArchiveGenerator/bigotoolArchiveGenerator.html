@@ -1,0 +1,138 @@
+<template>
+  <div class="slds-p-around_medium bigotool-generate">
+    <template if:true={isLoading}>
+      <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+    </template>
+
+    <!-- Confirmation + disclaimer -->
+    <template if:true={showConfirm}>
+      <div class="slds-box slds-theme_warning slds-m-bottom_medium">
+        <div class="slds-media slds-media_center">
+          <div class="slds-media__figure">
+            <lightning-icon icon-name="utility:warning" variant="warning" size="small"></lightning-icon>
+          </div>
+          <div class="slds-media__body">
+            <h2 class="slds-text-heading_small">Generate archive metadata</h2>
+          </div>
+        </div>
+      </div>
+
+      <p class="slds-m-bottom_small">
+        This will provision the supporting metadata for
+        <strong>{sourceObject}</strong>
+        and mark this configuration as
+        <strong>Generated</strong>
+        . The engine creates:
+      </p>
+      <ul class="slds-list_dotted slds-m-bottom_medium">
+        <li>
+          Big Object
+          <strong>{bigObjectApiName}</strong>
+          (fields + index)
+        </li>
+        <li>A custom tab for browsing archived records</li>
+        <li>An "All" list view</li>
+        <li>A scheduled archive batch job</li>
+      </ul>
+
+      <div class="slds-box slds-theme_shade slds-m-bottom_medium">
+        <p class="slds-text-title_caps slds-m-bottom_x-small">Disclaimer</p>
+        <p class="slds-text-body_small">
+          Metadata creation modifies your org schema through the Metadata API and cannot be undone automatically. Newly
+          created Big Objects and tabs must be removed manually if no longer needed.
+          <template if:true={deletesSource}>
+            <br />
+            <strong>This configuration deletes source records after archiving.</strong>
+            Archived data is stored in the Big Object; deleted source rows cannot be recovered except through a
+            configured restore profile.
+          </template>
+        </p>
+      </div>
+
+      <div class="slds-grid slds-grid_align-end">
+        <lightning-button
+          label="Cancel"
+          onclick={handleCancel}
+          class="slds-m-right_x-small"
+          disabled={isGenerating}
+        ></lightning-button>
+        <lightning-button
+          variant="brand"
+          label="Confirm &amp; Generate"
+          onclick={handleConfirm}
+          disabled={isGenerating}
+        ></lightning-button>
+      </div>
+
+      <template if:true={isGenerating}>
+        <div class="slds-m-top_medium slds-align_absolute-center">
+          <lightning-spinner alternative-text="Generating" size="small"></lightning-spinner>
+          <span class="slds-m-left_small">Generating metadata…</span>
+        </div>
+      </template>
+    </template>
+
+    <!-- Already generated -->
+    <template if:true={alreadyGenerated}>
+      <div class="slds-box slds-theme_success">
+        <lightning-icon icon-name="utility:success" variant="inverse" size="small"></lightning-icon>
+        <span class="slds-m-left_small">
+          This configuration has already been generated. Big Object
+          <strong>{bigObjectApiName}</strong>
+          is in place.
+        </span>
+      </div>
+      <div class="slds-grid slds-grid_align-end slds-m-top_medium">
+        <lightning-button variant="brand" label="Close" onclick={handleClose}></lightning-button>
+      </div>
+    </template>
+
+    <!-- Result -->
+    <template if:true={showResult}>
+      <div class={resultVariant}>
+        <div class="slds-media slds-media_center slds-m-bottom_small">
+          <div class="slds-media__figure">
+            <lightning-icon icon-name={resultIcon} size="small"></lightning-icon>
+          </div>
+          <div class="slds-media__body">
+            <p>{result.message}</p>
+          </div>
+        </div>
+      </div>
+
+      <template if:true={result.details}>
+        <ul class="slds-list_dotted slds-m-bottom_small">
+          <template for:each={result.details} for:item="detail">
+            <li key={detail}>{detail}</li>
+          </template>
+        </ul>
+      </template>
+
+      <template if:true={hasWarnings}>
+        <div class="slds-box slds-theme_warning slds-m-bottom_small">
+          <p class="slds-text-title_caps slds-m-bottom_x-small">Warnings</p>
+          <ul class="slds-list_dotted">
+            <template for:each={result.warnings} for:item="warn">
+              <li key={warn}>{warn}</li>
+            </template>
+          </ul>
+        </div>
+      </template>
+
+      <div class="slds-grid slds-grid_align-end slds-m-top_medium">
+        <lightning-button variant="brand" label="Close" onclick={handleClose}></lightning-button>
+      </div>
+    </template>
+
+    <!-- Error -->
+    <template if:true={errorMessage}>
+      <div class="slds-box slds-theme_error slds-m-top_small">
+        <lightning-icon icon-name="utility:error" variant="inverse" size="small"></lightning-icon>
+        <span class="slds-m-left_small">{errorMessage}</span>
+      </div>
+      <div class="slds-grid slds-grid_align-end slds-m-top_medium">
+        <lightning-button variant="brand" label="Close" onclick={handleClose}></lightning-button>
+      </div>
+    </template>
+  </div>
+</template>

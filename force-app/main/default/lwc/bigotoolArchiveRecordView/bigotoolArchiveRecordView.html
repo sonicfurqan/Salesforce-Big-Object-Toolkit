@@ -1,0 +1,146 @@
+<template>
+  <div class="slds-p-around_small">
+    <template if:true={isLoading}>
+      <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+    </template>
+
+    <template if:true={error}>
+      <div class="slds-text-color_error slds-p-around_small">{error}</div>
+    </template>
+
+    <template if:true={record}>
+      <template if:true={showRestore}>
+        <div class="slds-grid slds-grid_align-end slds-m-bottom_small">
+          <lightning-button
+            label="Restore"
+            title="Restore this record to its original object"
+            icon-name="utility:undo"
+            variant="brand"
+            onclick={handleRestore}
+            disabled={isRestoring}
+          ></lightning-button>
+          <template if:true={isRestoring}>
+            <lightning-spinner alternative-text="Restoring" size="small"></lightning-spinner>
+          </template>
+        </div>
+      </template>
+
+      <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
+        <div>
+          <p class="slds-text-title_caps slds-text-color_weak">Original Record Id</p>
+          <p class="slds-text-body_regular">{record.originalId}</p>
+        </div>
+        <div>
+          <p class="slds-text-title_caps slds-text-color_weak">Archived Date</p>
+          <p class="slds-text-body_regular">
+            <lightning-formatted-date-time
+              value={record.archivedDate}
+              year="numeric"
+              month="short"
+              day="2-digit"
+              hour="2-digit"
+              minute="2-digit"
+            ></lightning-formatted-date-time>
+          </p>
+        </div>
+      </div>
+
+      <template if:true={hasFields}>
+        <div class="slds-grid slds-wrap slds-gutters">
+          <template for:each={record.fields} for:item="f">
+            <div key={f.key} class="slds-col slds-size_1-of-2 slds-p-vertical_x-small">
+              <p class="slds-text-title_caps slds-text-color_weak slds-truncate" title={f.apiName}>{f.label}</p>
+              <div class="slds-text-body_regular bigotool-field-value">
+                <template if:true={f.empty}>
+                  <span class="slds-text-color_weak">—</span>
+                </template>
+                <template if:false={f.empty}>
+                  <template if:true={f.isBoolean}>
+                    <lightning-icon
+                      icon-name={f.boolIcon}
+                      size="x-small"
+                      class="slds-m-right_xx-small"
+                    ></lightning-icon>
+                    <lightning-formatted-text value={f.boolText}></lightning-formatted-text>
+                  </template>
+                  <template if:true={f.isCurrency}>
+                    <lightning-formatted-number
+                      value={f.numberValue}
+                      format-style="currency"
+                      currency-code="USD"
+                    ></lightning-formatted-number>
+                  </template>
+                  <template if:true={f.isPercent}>
+                    <lightning-formatted-number
+                      value={f.numberValue}
+                      format-style="percent-fixed"
+                    ></lightning-formatted-number>
+                  </template>
+                  <template if:true={f.isNumber}>
+                    <lightning-formatted-number value={f.numberValue}></lightning-formatted-number>
+                  </template>
+                  <template if:true={f.isDate}>
+                    <lightning-formatted-date-time
+                      value={f.value}
+                      year="numeric"
+                      month="short"
+                      day="2-digit"
+                    ></lightning-formatted-date-time>
+                  </template>
+                  <template if:true={f.isDateTime}>
+                    <lightning-formatted-date-time
+                      value={f.value}
+                      year="numeric"
+                      month="short"
+                      day="2-digit"
+                      hour="2-digit"
+                      minute="2-digit"
+                    ></lightning-formatted-date-time>
+                  </template>
+                  <template if:true={f.isEmail}>
+                    <lightning-formatted-email value={f.displayValue}></lightning-formatted-email>
+                  </template>
+                  <template if:true={f.isPhone}>
+                    <lightning-formatted-phone value={f.displayValue}></lightning-formatted-phone>
+                  </template>
+                  <template if:true={f.isUrl}>
+                    <lightning-formatted-url
+                      value={f.displayValue}
+                      label={f.displayValue}
+                      target="_blank"
+                    ></lightning-formatted-url>
+                  </template>
+                  <template if:true={f.isText}>
+                    <lightning-formatted-text value={f.displayValue}></lightning-formatted-text>
+                  </template>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template if:false={hasFields}>
+        <p class="slds-text-color_weak">No archived fields are configured for this object.</p>
+      </template>
+    </template>
+
+    <template if:true={showNavigatePrompt}>
+      <section role="dialog" tabindex="-1" aria-modal="true" class="slds-modal slds-fade-in-open">
+        <div class="slds-modal__container">
+          <header class="slds-modal__header">
+            <h2 class="slds-modal__title slds-hyphenate">Record restored</h2>
+          </header>
+          <div class="slds-modal__content slds-p-around_medium">
+            <p>The record was restored to {restoredObjectLabel}. Do you want to navigate to the restored record?</p>
+          </div>
+          <footer class="slds-modal__footer">
+            <lightning-button label="No" onclick={handleNavigateNo} class="slds-m-right_x-small"></lightning-button>
+            <lightning-button label="Yes, view record" variant="brand" onclick={handleNavigateYes}></lightning-button>
+          </footer>
+        </div>
+      </section>
+      <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+  </div>
+</template>

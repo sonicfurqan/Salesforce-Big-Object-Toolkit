@@ -1,0 +1,14 @@
+.bigotool-generate {
+  min-width: 30rem;
+  max-width: 40rem;
+}
+
+.bigotool-generate .success {
+  border-left: 4px solid #2e844a;
+  padding: 0.5rem 0.75rem;
+}
+
+.bigotool-generate .error {
+  border-left: 4px solid #ba0517;
+  padding: 0.5rem 0.75rem;
+}

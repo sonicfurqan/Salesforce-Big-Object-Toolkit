@@ -1,0 +1,206 @@
+/* Main Container */
+.bigotool-archive-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #f3f3f3;
+}
+
+/* Header Section */
+.bigotool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid #d8dce6;
+  gap: 1rem;
+}
+
+.bigotool-header-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.bigotool-metadata {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bigotool-metadata-icon {
+  color: #0070d2;
+  flex-shrink: 0;
+}
+
+.bigotool-metadata-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bigotool-label {
+  font-size: 0.75rem;
+  color: #757575;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bigotool-status {
+  font-size: 0.875rem;
+  color: #161e2e;
+  margin: 0;
+  font-weight: 500;
+}
+
+.bigotool-header-right {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Toolbar Section */
+.bigotool-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid #d8dce6;
+  gap: 0.5rem;
+}
+
+.bigotool-toolbar-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Filter Icon Button - Highlighted State */
+:host ::part(button-icon),
+.bigotool-toolbar-right lightning-button-icon::part(button) {
+  transition: background-color 0.2s ease;
+}
+
+/* Split View Container */
+.bigotool-split-view {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* Data Section - Left Component (~75%) */
+.bigotool-data-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  background-color: #ffffff;
+  border-right: 1px solid #d8dce6;
+}
+
+.bigotool-datatable {
+  width: 100%;
+}
+
+/* Filters Sidebar - Right Component (~25%) */
+.bigotool-filters-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #f3f3f3;
+  border-left: 1px solid #d8dce6;
+  overflow: hidden;
+}
+
+.bigotool-filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #d8dce6;
+  background-color: #ffffff;
+}
+
+.bigotool-filters-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #161e2e;
+}
+
+.bigotool-filters-close {
+  cursor: pointer;
+  color: #0070d2;
+}
+
+/* Filter Content */
+.bigotool-filters-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.bigotool-filters-content .slds-form {
+  width: 100%;
+}
+
+.bigotool-filters-content .slds-form-element {
+  margin-bottom: 1rem;
+}
+
+/* Filter Actions */
+.bigotool-filters-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-top: 1px solid #d8dce6;
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.bigotool-filters-actions lightning-button {
+  flex: 1;
+}
+
+/* Modal Body */
+.bigotool-modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .bigotool-filters-sidebar {
+    width: 280px;
+  }
+}
+
+@media (max-width: 768px) {
+  .bigotool-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bigotool-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .bigotool-split-view {
+    flex-direction: column;
+  }
+
+  .bigotool-data-section {
+    flex: 1;
+    border-right: none;
+    border-bottom: 1px solid #d8dce6;
+  }
+
+  .bigotool-filters-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+  }
+}

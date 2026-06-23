@@ -277,12 +277,8 @@ Immutable run history for archive/restore/flush jobs (high volume, long retentio
 | `Archiving_Enabled__c` | Checkbox | Org-wide archiving toggle |
 | `Max_Batch_Concurrency__c` | Number | Throttle simultaneous archive jobs |
 | `Debug_Mode__c` | Checkbox | Verbose `Archive_Job_Log__b` writes |
-| `Visible_Archive_Objects__c` | Text Area (255) | **CSV whitelist** of archive object API names this user/profile may view (e.g., `Archive_Case__b,Archive_Opportunity__b`). **Blank/null = full access to all archive objects.** Non-blank = restricted to only the listed objects. Resolves per user → profile → org via hierarchy. *(Custom Settings cap text at 255 chars — see overflow note below for >~12 objects.)* |
-| `Visible_Archive_Objects_2__c` (optional) | Text Area (255) | **Overflow** field, concatenated with the first when a user/profile needs to whitelist more object names than fit in 255 chars. `BIGOTOOL_AccessScope` joins both fields before parsing. |
 
-> **⚠️ Custom Setting field-type limit:** Salesforce **Custom Settings do not support Long Text Area** — the widest available type is **Text Area (255)**. To honor the "single custom setting holds a comma-separated list" design within this limit, `Visible_Archive_Objects__c` is **Text Area (255)** (≈12–15 typical object API names). If a profile/user needs more, add the optional `Visible_Archive_Objects_2__c` overflow field(s); `BIGOTOOL_AccessScope` concatenates them before splitting on commas. If you anticipate whitelisting *many* objects, prefer a separate `Archive_Visibility__c` custom object (one row per user/profile + object) instead — but for the common case the CSV-in-custom-setting approach is simplest and needs no joins.
-
-> **Object-level visibility scoping (additive to `BIGOTOOL_Archive_Viewer`):** the permission set grants the *capability* to read archived data; `Visible_Archive_Objects__c` then *narrows which archive objects* a given user/profile actually sees. See §10.2 for the resolution logic.
+> **Archive visibility is governed by permission sets, not custom settings.** When a config is generated, `BIGOTOOL_MetadataGenerator` creates a dedicated `BIGOTOOL_Archive_<Object>` permission set granting read on that Big Object (object + FLS) and visibility of its tab. Assign the relevant generated permission set(s) to a user/profile to control exactly which archive objects they can see. (The former `Visible_Archive_Objects__c` / `Visible_Archive_Objects_2__c` CSV-whitelist fields have been removed.)
 
 > **Custom Object vs CS division of labor:** Custom Objects = *structure & intent* (runtime CRUD via wizards, list views, reports, validation, per-record sharing). Hierarchy CS = *operational switches* (instant on/off per org/profile/user, no record edit). This satisfies "feature toggles per object" (config `Is_Active__c`) **and** "global/contextual toggles" (CS).
 
@@ -465,7 +461,7 @@ All UI is **Lightning Web Components** inside the unified app, using **SLDS** fo
 
 ### 7.3 Feature Toggle Console (`bigotoolToggleConsole`)
 
-A grid of every configured object with **inline switches**: Logging ▢/▣, Archiving ▢/▣, plus the global **Master Switch**. Writes to Hierarchy CS — instant, no deploy. Shows last-run status and next-scheduled time. Also hosts an **Archive Visibility** panel: a per-profile/per-user multi-select of existing archive objects that writes `BIGOTOOL_Settings__c.Visible_Archive_Objects__c` (blank = full access; see §10.2).
+A grid of every configured object with **inline switches**: Logging ▢/▣, Archiving ▢/▣, plus the global **Master Switch**. Writes to Hierarchy CS — instant, no deploy. Shows last-run status and next-scheduled time. Archive visibility is controlled by assigning the generated `BIGOTOOL_Archive_<Object>` permission sets (see §10.2).
 
 ### 7.4 Field History Timeline (`bigotoolHistoryTimeline`) — record page component
 
@@ -708,7 +704,7 @@ The package ships **four primary permission sets** plus an optional **export add
 |---|---|---|---|
 | **`BIGOTOOL_Administrator`** | System admins / package owners | ✅ | **Full access to everything**: configure via wizards, run generation, view field history, view archives, restore, **export**, manage feature toggles (`BIGOTOOL_Settings__c`), view logs. Holds all custom permissions (`BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`). |
 | **`BIGOTOOL_History_Viewer`** | Support / audit readers | ✅ | **Read** field change history: read on `FieldChangeLog__b`, access to `bigotoolHistoryTimeline`. No configure/restore/export. |
-| **`BIGOTOOL_Archive_Viewer`** | Business users browsing archived data | ✅ | **Read** archived records: read on **all** generated `Archive_<Obj>__b` Big Objects + their tabs, access to `bigotoolArchiveBrowser`/`bigotoolArchiveDetail`. No configure/restore/export. **Which** archive objects are actually shown is further scoped by `BIGOTOOL_Settings__c.Visible_Archive_Objects__c` (see §10.2). |
+| **`BIGOTOOL_Archive_Viewer`** | Business users browsing archived data | ✅ | **Read** archived records: read on the generated `Archive_<Obj>__b` Big Objects + their tabs granted by the per-object `BIGOTOOL_Archive_<Obj>` permission sets, access to `bigotoolArchiveBrowser`/`bigotoolArchiveDetail`. No configure/restore/export. **Which** archive objects are shown is controlled by which generated permission sets are assigned (see §10.2). |
 | **`BIGOTOOL_Configurator`** | Power admins running setup | ✅ | **Configure via wizards**: CRUD on config custom objects (`Archive_Config__c`, `Field_Log_Config__c`, `Field_Log_Field__c`, `Restore_Profile__c`), run the generation engine; holds `BIGOTOOL_Can_Configure`. Access to `bigotoolArchiveWizard`, `bigotoolFieldLogWizard`, `bigotoolToggleConsole`. |
 | **`BIGOTOOL_Data_Exporter`** *(add-on)* | Users cleared for bulk data export | ✅ | Grants **`BIGOTOOL_Can_Export`** only — surfaces the Export action on the viewers. Stackable on top of a viewer set; **already included** in `BIGOTOOL_Administrator`. |
 
@@ -727,67 +723,20 @@ The package ships **four primary permission sets** plus an optional **export add
 
 **Notes & best practices:**
 - **Stackable design:** assign a viewer set for read access, then add `BIGOTOOL_Data_Exporter` to selectively grant export — no need for separate combined sets. To let a viewer also export, assign both.
-- **Single shared Archive viewer:** the auto-generation engine **adds** each new `Archive_<Obj>__b` object/tab permission to the one shared `BIGOTOOL_Archive_Viewer` set (and grants Admin), rather than creating per-object permission sets — so a single assignment covers all current and future archived objects.
+- **Per-object Archive permission sets:** the generation engine creates a dedicated `BIGOTOOL_Archive_<Obj>` permission set (object + tab + FLS) for each new `Archive_<Obj>__b` it generates, so visibility is controlled by assigning the relevant generated set(s). `BIGOTOOL_Administrator` is additionally granted read on every archive object.
+- **Per-object Archive permission sets:** the generation engine creates a dedicated `BIGOTOOL_Archive_<Obj>` permission set per generated `Archive_<Obj>__b` (object read + field-level read + tab visibility). Assigning the relevant permission set(s) controls exactly which archive objects a user can see.
 - **Custom permissions** (`BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`) drive both LWC button visibility and server-side Apex authorization checks (defense in depth).
-- Consider bundling these into a **Permission Set Group** per persona (e.g., "Archive Analyst" = Archive_Viewer + Data_Exporter) for simpler assignment at scale.
+- Consider bundling these into a **Permission Set Group** per persona (e.g., "Archive Analyst" = Archive_Viewer + Data_Exporter + the needed `BIGOTOOL_Archive_<Obj>` sets) for simpler assignment at scale.
 
-### 10.2 Archive Object Visibility Scoping (`BIGOTOOL_Settings__c` add-on)
+### 10.2 Archive Object Visibility via Generated Permission Sets
 
-The `BIGOTOOL_Archive_Viewer` permission set is intentionally **broad** — it grants the *capability* to read every generated `Archive_<Obj>__b`. A second, **additive** layer driven by the hierarchy custom setting **`BIGOTOOL_Settings__c.Visible_Archive_Objects__c`** narrows *which* archive objects each user/profile can actually see, **without** creating per-object permission sets.
+When a config is generated, `BIGOTOOL_MetadataGenerator` creates a dedicated **`BIGOTOOL_Archive_<Obj>`** permission set that grants read on that specific `Archive_<Obj>__b` Big Object (object permission + field-level read on every generated column) and visibility of its generated tab.
 
-#### Resolution rule (default-allow, config-restricts)
-
-For the running user, resolve `BIGOTOOL_Settings__c.getInstance()` (Salesforce auto-merges **User → Profile → Org** defaults, most specific wins):
-
-1. **No config** — `Visible_Archive_Objects__c` is **blank/null** → the user has **full access** to **all** archive objects (subject to the permission set). This is the default state.
-2. **Has config** — `Visible_Archive_Objects__c` contains a CSV of object API names → the user is **restricted to only those** archive objects; every other archive object is hidden and its records are not queryable for that user.
-
-```
-effectiveVisibleObjects(user):
-    csv = BIGOTOOL_Settings__c.getInstance(user).Visible_Archive_Objects__c
-    if isBlank(csv):  return ALL_ARCHIVE_OBJECTS        // no config ⇒ full access
-    else:             return parseCsvToSet(csv)         // config ⇒ whitelist only
-```
-
-> Because it's a **hierarchy** setting, an admin can set an **Org default** (e.g., blank = everyone sees all), override at **Profile** level (e.g., "Support" profile sees only `Archive_Case__b`), and further override for a **specific user** — all with no deploy, edited live from the Toggle Console or Setup.
-
-#### Enforcement points (defense in depth)
-
-A shared Apex utility **`BIGOTOOL_AccessScope`** centralizes the rule and is called everywhere archive data is reached:
-
-| Layer | Behavior |
-|---|---|
-| **Tab/app navigation** | `bigotoolArchiveBrowser` lists only the archive objects returned by `effectiveVisibleObjects()`; non-visible tabs render "no access". |
-| **Browser/detail query** | `BIGOTOOL_ArchiveController` calls `BIGOTOOL_AccessScope.assertCanView(objectApiName)` before any SOQL; throws `AuraHandledException` if the object isn't in the effective set. |
-| **Export** | `BIGOTOOL_ExportService` re-applies the same check, so a scoped user cannot export an archive object they cannot view (combined with the `BIGOTOOL_Can_Export` gate). |
-| **Restore** | Admin-only; unaffected, but `BIGOTOOL_AccessScope` is still honored if a non-admin path is ever exposed. |
-
-```apex
-public with sharing class BIGOTOOL_AccessScope {
-    public static Set<String> visibleArchiveObjects() {
-        BIGOTOOL_Settings__c s = BIGOTOOL_Settings__c.getInstance();
-        String csv = String.join(
-            new List<String>{
-                s.Visible_Archive_Objects__c,        // Text Area (255)
-                s.Visible_Archive_Objects_2__c       // optional overflow
-            }.stream().filter(x -> x != null).toList(), ','   // illustrative; null-safe join
-        );
-        return String.isBlank(csv)
-            ? BIGOTOOL_ConfigRepo.allArchiveObjectApiNames()   // no config ⇒ full access
-            : new Set<String>(csv.replaceAll('\\s','').split(','));
-    }
-    public static void assertCanView(String objectApiName) {
-        if (!visibleArchiveObjects().contains(objectApiName)) {
-            throw new AuraHandledException('You do not have access to this archive object.');
-        }
-    }
-}
-```
+Visibility is therefore controlled purely by **permission set assignment** — assign a user/profile only the `BIGOTOOL_Archive_<Obj>` sets for the archives they should see. There is no custom-setting whitelist to maintain; the former `Visible_Archive_Objects__c` / `Visible_Archive_Objects_2__c` fields and the `BIGOTOOL_AccessScope` resolution layer have been removed.
 
 **Notes:**
-- This scoping is **viewer-only**; `BIGOTOOL_Administrator` always bypasses it (admins see everything regardless of `Visible_Archive_Objects__c`).
-- Keep the CSV in sync with generated objects via the Toggle Console UI (a multi-select of existing archive objects writes the CSV), avoiding typos.
-- The whitelist is **opt-in restriction**: leaving it blank preserves the simplest "see all" experience, matching the requirement that *no config ⇒ full access*.
+- `BIGOTOOL_Administrator` is granted read on every generated archive object directly, so admins always see everything.
+- Bundle the generated permission sets into a **Permission Set Group** per persona for simpler assignment at scale.
 
 ---
 

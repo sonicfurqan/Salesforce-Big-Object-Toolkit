@@ -206,6 +206,47 @@ private class BIGOTOOL_ArchiveWizardControllerTest {
   }
 
   @IsTest
+  static void saveConfig_persistsArchiveFieldChildren() {
+    BIGOTOOL_ArchiveWizardController.ConfigInput cfgIn = buildInput();
+    cfgIn.archiveFields = new List<String>{ 'Name', 'Industry', 'AnnualRevenue' };
+    cfgIn.archiveFieldLabels = new List<String>{ 'Account Name', 'Industry', 'Annual Revenue' };
+
+    Id configId;
+    System.runAs(configuratorUser()) {
+      configId = BIGOTOOL_ArchiveWizardController.saveConfig(JSON.serialize(cfgIn));
+    }
+
+    List<Archive_Field__c> fields = [
+      SELECT Field_API_Name__c, Field_Label__c
+      FROM Archive_Field__c
+      WHERE Archive_Config__c = :configId
+    ];
+    System.assertEquals(3, fields.size(), 'All archive fields persisted as children.');
+
+    // Re-saving with a smaller set replaces the children. List-view fields are
+    // always materialized as children too, so shrink both for a single child.
+    cfgIn.configId = configId;
+    cfgIn.archiveFields = new List<String>{ 'Name' };
+    cfgIn.archiveFieldLabels = new List<String>{ 'Account Name' };
+    cfgIn.listViewFields = new List<String>{ 'Name' };
+    System.runAs(configuratorUser()) {
+      BIGOTOOL_ArchiveWizardController.saveConfig(JSON.serialize(cfgIn));
+    }
+    System.assertEquals(
+      1,
+      [SELECT COUNT() FROM Archive_Field__c WHERE Archive_Config__c = :configId],
+      'Archive field children replaced on re-save.'
+    );
+
+    BIGOTOOL_ArchiveWizardController.ConfigDetail detail;
+    System.runAs(configuratorUser()) {
+      detail = BIGOTOOL_ArchiveWizardController.getConfigForEdit(configId);
+    }
+    System.assertEquals(1, detail.archiveFields.size(), 'Archive fields returned for edit.');
+    System.assertEquals('Name', detail.archiveFields[0]);
+  }
+
+  @IsTest
   static void previewMatchingCount_age_returnsCount() {
     insert new Account(Name = 'Preview Co');
     Integer count;

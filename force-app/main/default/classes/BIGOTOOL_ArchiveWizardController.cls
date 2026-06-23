@@ -34,10 +34,16 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
     public String apiName;
     @AuraEnabled
     public String dataType;
+    @AuraEnabled
+    public Boolean listViewEligible;
     public FieldOption(String label, String apiName, String dataType) {
+      this(label, apiName, dataType, true);
+    }
+    public FieldOption(String label, String apiName, String dataType, Boolean listViewEligible) {
       this.label = label;
       this.apiName = apiName;
       this.dataType = dataType;
+      this.listViewEligible = listViewEligible;
     }
   }
 
@@ -76,6 +82,12 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
     @AuraEnabled
     public List<String> listViewFields;
     @AuraEnabled
+    public List<String> archiveFields;
+    @AuraEnabled
+    public List<String> archiveFieldLabels;
+    @AuraEnabled
+    public List<String> archiveFieldTypes;
+    @AuraEnabled
     public Boolean deleteAfterArchive;
     @AuraEnabled
     public Decimal batchSize;
@@ -104,6 +116,12 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
     public String filterLogic;
     @AuraEnabled
     public List<String> listViewFields;
+    @AuraEnabled
+    public List<String> archiveFields;
+    @AuraEnabled
+    public List<String> archiveFieldLabels;
+    @AuraEnabled
+    public List<String> archiveFieldTypes;
     @AuraEnabled
     public Boolean deleteAfterArchive;
     @AuraEnabled
@@ -175,10 +193,27 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
       if (dt == Schema.DisplayType.ADDRESS || dt == Schema.DisplayType.LOCATION || dt == Schema.DisplayType.BASE64) {
         continue;
       }
-      options.add(new FieldOption(fd.getLabel(), fd.getName(), String.valueOf(dt)));
+      options.add(new FieldOption(fd.getLabel(), fd.getName(), String.valueOf(dt), isListViewEligible(fd)));
     }
     options.sort(new FieldLabelComparator());
     return options;
+  }
+
+  /**
+   * List view columns become physical Big Object fields, so they are limited to
+   * simple, single-value field types: long text areas / rich text and lookups
+   * (references) are excluded.
+   */
+  @TestVisible
+  private static Boolean isListViewEligible(Schema.DescribeFieldResult fd) {
+    Schema.DisplayType dt = fd.getType();
+    if (dt == Schema.DisplayType.REFERENCE) {
+      return false;
+    }
+    if (dt == Schema.DisplayType.TEXTAREA && fd.getLength() > 255) {
+      return false;
+    }
+    return true;
   }
 
   /** Date/DateTime fields eligible for age-based criteria. */
@@ -327,6 +362,11 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
           FROM Restore_Profiles__r
           ORDER BY CreatedDate ASC
           LIMIT 1
+        ),
+        (
+          SELECT Field_API_Name__c, Field_Label__c, Field_Type__c, Is_List_View__c
+          FROM Archive_Fields__r
+          ORDER BY Field_API_Name__c ASC
         )
       FROM Archive_Config__c
       WHERE Id = :configId
@@ -346,9 +386,23 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
     detail.ageField = cfg.Age_Field__c;
     detail.ageThresholdDays = cfg.Age_Threshold_Days__c;
     detail.filterLogic = cfg.Filter_Logic__c;
-    detail.listViewFields = String.isBlank(cfg.List_View_Fields__c)
-      ? new List<String>()
-      : splitCsv(cfg.List_View_Fields__c);
+    detail.listViewFields = new List<String>();
+    detail.archiveFields = new List<String>();
+    detail.archiveFieldLabels = new List<String>();
+    detail.archiveFieldTypes = new List<String>();
+    for (Archive_Field__c af : cfg.Archive_Fields__r) {
+      detail.archiveFields.add(af.Field_API_Name__c);
+      detail.archiveFieldLabels.add(af.Field_Label__c);
+      detail.archiveFieldTypes.add(af.Field_Type__c);
+      if (af.Is_List_View__c == true) {
+        detail.listViewFields.add(af.Field_API_Name__c);
+      }
+    }
+    // Legacy fallback: configs created before list-view fields were stored as
+    // flagged child records still carry the CSV column list.
+    if (detail.listViewFields.isEmpty() && String.isNotBlank(cfg.List_View_Fields__c)) {
+      detail.listViewFields = splitCsv(cfg.List_View_Fields__c);
+    }
     detail.deleteAfterArchive = cfg.Delete_After_Archive__c;
     detail.batchSize = cfg.Batch_Size__c;
     detail.scheduleCron = cfg.Schedule_Cron__c;
@@ -419,7 +473,91 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
 
     // Restore profile is a master-detail child of the Archive Config.
     upsertRestoreProfile(input.restoreProfile, cfg.Id);
+
+    // Replace the set of archived-field child records for this config.
+    syncArchiveFields(input, cfg.Id);
     return cfg.Id;
+  }
+
+  private static void syncArchiveFields(ConfigInput input, Id parentConfigId) {
+    if (
+      !Schema.SObjectType.Archive_Field__c.isCreateable() ||
+      !Schema.SObjectType.Archive_Field__c.isDeletable()
+    ) {
+      throw new AuraHandledException('You do not have access to Archive Field records.');
+    }
+    delete [SELECT Id FROM Archive_Field__c WHERE Archive_Config__c = :parentConfigId];
+
+    // List-view fields are flagged on their Archive_Field__c records and must
+    // always be archived (so the generated physical column can be populated), so
+    // we union them into the archived-field set even if the user only picked
+    // them as columns.
+    Set<String> listViewSet = new Set<String>();
+    if (input.listViewFields != null) {
+      for (String lv : input.listViewFields) {
+        if (String.isNotBlank(lv)) {
+          listViewSet.add(lv.toLowerCase());
+        }
+      }
+    }
+
+    List<String> orderedFields = new List<String>();
+    Map<String, String> labelByField = new Map<String, String>();
+    Map<String, String> typeByField = new Map<String, String>();
+    Set<String> seen = new Set<String>();
+
+    if (input.archiveFields != null) {
+      for (Integer i = 0; i < input.archiveFields.size(); i++) {
+        String apiName = input.archiveFields[i];
+        if (String.isBlank(apiName) || seen.contains(apiName.toLowerCase())) {
+          continue;
+        }
+        seen.add(apiName.toLowerCase());
+        orderedFields.add(apiName);
+        labelByField.put(
+          apiName.toLowerCase(),
+          (input.archiveFieldLabels != null && i < input.archiveFieldLabels.size())
+            ? input.archiveFieldLabels[i]
+            : apiName
+        );
+        typeByField.put(
+          apiName.toLowerCase(),
+          (input.archiveFieldTypes != null && i < input.archiveFieldTypes.size())
+            ? input.archiveFieldTypes[i]
+            : null
+        );
+      }
+    }
+
+    // Ensure every list-view column is represented even if it was not also
+    // explicitly chosen in the "fields to archive" picker.
+    if (input.listViewFields != null) {
+      for (String lv : input.listViewFields) {
+        if (String.isBlank(lv) || seen.contains(lv.toLowerCase())) {
+          continue;
+        }
+        seen.add(lv.toLowerCase());
+        orderedFields.add(lv);
+        labelByField.put(lv.toLowerCase(), lv);
+      }
+    }
+
+    if (orderedFields.isEmpty()) {
+      return;
+    }
+
+    List<Archive_Field__c> children = new List<Archive_Field__c>();
+    for (String apiName : orderedFields) {
+      String key = apiName.toLowerCase();
+      Archive_Field__c af = new Archive_Field__c();
+      af.Archive_Config__c = parentConfigId;
+      af.Field_API_Name__c = apiName;
+      af.Field_Label__c = labelByField.containsKey(key) ? labelByField.get(key) : apiName;
+      af.Field_Type__c = typeByField.get(key);
+      af.Is_List_View__c = listViewSet.contains(key);
+      children.add(af);
+    }
+    insert children;
   }
 
   private static Id upsertRestoreProfile(RestoreProfileInput rp, Id parentConfigId) {

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Last_Archive_Run__c</fullName>
+    <description>Timestamp of the most recent archive batch completion for this configuration.</description>
+    <externalId>false</externalId>
+    <label>Last Archive Run</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>DateTime</type>
+</CustomField>

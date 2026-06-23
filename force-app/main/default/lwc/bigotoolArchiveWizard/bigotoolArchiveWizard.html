@@ -163,8 +163,11 @@
         <!-- STEP 3: Fields -->
         <template if:true={isStep3}>
           <h2 class="slds-text-heading_small slds-m-bottom_small">Step 3 · List View Columns</h2>
-          <p class="slds-text-color_weak slds-m-bottom_small">
-            Choose fields to display as columns in the archived object list view.
+          <p class="slds-text-color_weak slds-m-bottom_xx-small">
+            Choose up to {maxListViewFields} fields to display as columns in the archived object list view.
+          </p>
+          <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+            {listViewLimitHint}
           </p>
           <template if:true={isEditMode}>
             <p class="slds-text-color_weak slds-m-bottom_small">
@@ -195,6 +198,7 @@
                       alternative-text="Add"
                       data-value={f.apiName}
                       onclick={handleAddField}
+                      disabled={listViewLimitReached}
                     ></lightning-button-icon>
                   </div>
                 </template>
@@ -221,6 +225,83 @@
                     ></lightning-button-icon>
                   </div>
                 </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fields to archive -->
+          <div class="slds-m-top_large slds-border_top slds-p-top_medium">
+            <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center slds-m-bottom_xx-small">
+              <h2 class="slds-text-heading_small">Fields to Archive</h2>
+              <div>
+                <lightning-button
+                  label="Select All"
+                  variant="base"
+                  class="slds-m-right_small"
+                  onclick={handleSelectAllArchiveFields}
+                ></lightning-button>
+                <lightning-button
+                  label="Clear All"
+                  variant="base"
+                  onclick={handleClearArchiveFields}
+                  disabled={clearArchiveDisabled}
+                ></lightning-button>
+              </div>
+            </div>
+            <p class="slds-text-color_weak slds-m-bottom_small">
+              Select the source fields whose values will be archived into the Big Object
+              (stored as JSON). These are independent of the list view columns above.
+            </p>
+            <lightning-input
+              type="search"
+              label="Search fields to archive"
+              value={archiveFieldSearch}
+              onchange={handleArchiveFieldSearch}
+            ></lightning-input>
+            <div class="slds-grid slds-gutters slds-m-top_small">
+              <div class="slds-col slds-size_1-of-2">
+                <p class="slds-text-title_caps slds-m-bottom_x-small">Available</p>
+                <div class="slds-scrollable_y option-list">
+                  <template for:each={availableArchiveFields} for:item="f">
+                    <div
+                      key={f.apiName}
+                      class="slds-grid slds-grid_align-spread slds-p-around_x-small slds-border_bottom"
+                    >
+                      <span>
+                        <b>{f.label}</b>
+                        <span class="slds-text-color_weak">· {f.apiName}</span>
+                      </span>
+                      <lightning-button-icon
+                        icon-name="utility:add"
+                        alternative-text="Add"
+                        data-value={f.apiName}
+                        onclick={handleAddArchiveField}
+                      ></lightning-button-icon>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <div class="slds-col slds-size_1-of-2">
+                <p class="slds-text-title_caps slds-m-bottom_x-small">Selected ({selectedArchiveFieldCount})</p>
+                <div class="slds-scrollable_y option-list">
+                  <template for:each={selectedArchiveFields} for:item="f">
+                    <div
+                      key={f.apiName}
+                      class="slds-grid slds-grid_align-spread slds-p-around_x-small slds-border_bottom"
+                    >
+                      <span>
+                        <b>{f.label}</b>
+                        <span class="slds-text-color_weak">· {f.apiName}</span>
+                      </span>
+                      <lightning-button-icon
+                        icon-name="utility:dash"
+                        alternative-text="Remove"
+                        data-value={f.apiName}
+                        onclick={handleRemoveArchiveField}
+                      ></lightning-button-icon>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>

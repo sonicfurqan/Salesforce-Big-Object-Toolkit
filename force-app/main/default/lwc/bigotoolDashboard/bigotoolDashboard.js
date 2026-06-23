@@ -1,33 +1,36 @@
-import { LightningElement, wire, track } from 'lwc';
-import { refreshApex } from '@salesforce/apex';
-import getDashboard from '@salesforce/apex/BIGOTOOL_DashboardController.getDashboard';
+import { LightningElement, wire, track } from "lwc";
+import { refreshApex } from "@salesforce/apex";
+import { ShowToastEvent } from "lightning/platformShowToastEvent";
+import getDashboard from "@salesforce/apex/BIGOTOOL_DashboardController.getDashboard";
+import getOrgSettings from "@salesforce/apex/BIGOTOOL_DashboardController.getOrgSettings";
+import saveOrgSettings from "@salesforce/apex/BIGOTOOL_DashboardController.saveOrgSettings";
 
 const JOB_COLUMNS = [
-  { label: 'Configuration', fieldName: 'configName', type: 'text', wrapText: true },
-  { label: 'Job Type', fieldName: 'jobType', type: 'text', initialWidth: 120 },
+  { label: "Configuration", fieldName: "configName", type: "text", wrapText: true },
+  { label: "Job Type", fieldName: "jobType", type: "text", initialWidth: 120 },
   {
-    label: 'Status',
-    fieldName: 'status',
-    type: 'text',
+    label: "Status",
+    fieldName: "status",
+    type: "text",
     initialWidth: 120,
-    cellAttributes: { class: { fieldName: 'statusClass' } }
+    cellAttributes: { class: { fieldName: "statusClass" } }
   },
-  { label: 'Processed', fieldName: 'recordsProcessed', type: 'number', initialWidth: 120 },
-  { label: 'Failed', fieldName: 'recordsFailed', type: 'number', initialWidth: 100 },
+  { label: "Processed", fieldName: "recordsProcessed", type: "number", initialWidth: 120 },
+  { label: "Failed", fieldName: "recordsFailed", type: "number", initialWidth: 100 },
   {
-    label: 'Run Date/Time',
-    fieldName: 'runDateTime',
-    type: 'date',
+    label: "Run Date/Time",
+    fieldName: "runDateTime",
+    type: "date",
     initialWidth: 180,
     typeAttributes: {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
     }
   },
-  { label: 'Error', fieldName: 'errorSummary', type: 'text', wrapText: true }
+  { label: "Error", fieldName: "errorSummary", type: "text", wrapText: true }
 ];
 
 export default class BigotoolDashboard extends LightningElement {
@@ -36,6 +39,10 @@ export default class BigotoolDashboard extends LightningElement {
   loading = true;
   error;
   wiredResult;
+
+  @track showSettings = false;
+  @track settings = {};
+  savingSettings = false;
 
   @wire(getDashboard)
   wired(result) {
@@ -63,14 +70,14 @@ export default class BigotoolDashboard extends LightningElement {
   }
 
   statusClass(status) {
-    const s = (status || '').toLowerCase();
-    if (s === 'failed' || s === 'error') {
-      return 'slds-text-color_error';
+    const s = (status || "").toLowerCase();
+    if (s === "failed" || s === "error") {
+      return "slds-text-color_error";
     }
-    if (s === 'success' || s === 'completed') {
-      return 'slds-text-color_success';
+    if (s === "success" || s === "completed") {
+      return "slds-text-color_success";
     }
-    return '';
+    return "";
   }
 
   handleRefresh() {
@@ -78,6 +85,77 @@ export default class BigotoolDashboard extends LightningElement {
     refreshApex(this.wiredResult).finally(() => {
       this.loading = false;
     });
+  }
+
+  async handleOpenSettings() {
+    try {
+      const os = await getOrgSettings();
+      this.settings = { ...os };
+      this.showSettings = true;
+    } catch (e) {
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Unable to load settings",
+          message: this.reduceError(e),
+          variant: "error"
+        })
+      );
+    }
+  }
+
+  handleCloseSettings() {
+    this.showSettings = false;
+  }
+
+  handleToggleChange(event) {
+    const field = event.target.dataset.field;
+    this.settings = { ...this.settings, [field]: event.target.checked };
+  }
+
+  handleConcurrencyChange(event) {
+    const value = event.target.value;
+    this.settings = {
+      ...this.settings,
+      maxBatchConcurrency: value === "" ? null : Number(value)
+    };
+  }
+
+  async handleSaveSettings() {
+    this.savingSettings = true;
+    try {
+      const os = await saveOrgSettings({
+        masterSwitch: !!this.settings.masterSwitch,
+        loggingEnabled: !!this.settings.loggingEnabled,
+        archivingEnabled: !!this.settings.archivingEnabled,
+        debugMode: !!this.settings.debugMode,
+        maxBatchConcurrency:
+          this.settings.maxBatchConcurrency === null ||
+          this.settings.maxBatchConcurrency === undefined ||
+          this.settings.maxBatchConcurrency === ""
+            ? null
+            : this.settings.maxBatchConcurrency
+      });
+      this.settings = { ...os };
+      this.showSettings = false;
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Settings saved",
+          message: "BIGOTOOL global settings updated.",
+          variant: "success"
+        })
+      );
+      await refreshApex(this.wiredResult);
+    } catch (e) {
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Save failed",
+          message: this.reduceError(e),
+          variant: "error"
+        })
+      );
+    } finally {
+      this.savingSettings = false;
+    }
   }
 
   get hasData() {
@@ -111,27 +189,27 @@ export default class BigotoolDashboard extends LightningElement {
   get successRate() {
     const j = this.jobs;
     if (!j || !j.totalRuns) {
-      return '—';
+      return "—";
     }
     const rate = (j.successRuns / j.totalRuns) * 100;
     return `${rate.toFixed(0)}%`;
   }
 
   get masterSwitchLabel() {
-    return this.toggles && this.toggles.masterSwitch ? 'ON' : 'OFF';
+    return this.toggles && this.toggles.masterSwitch ? "ON" : "OFF";
   }
 
   get masterSwitchClass() {
-    const base = 'slds-badge slds-m-left_x-small ';
-    return base + (this.toggles && this.toggles.masterSwitch ? 'slds-theme_success' : 'slds-theme_error');
+    const base = "slds-badge slds-m-left_x-small ";
+    return base + (this.toggles && this.toggles.masterSwitch ? "slds-theme_success" : "slds-theme_error");
   }
 
   get loggingLabel() {
-    return this.toggles && this.toggles.loggingEnabled ? 'Enabled' : 'Disabled';
+    return this.toggles && this.toggles.loggingEnabled ? "Enabled" : "Disabled";
   }
 
   get archivingLabel() {
-    return this.toggles && this.toggles.archivingEnabled ? 'Enabled' : 'Disabled';
+    return this.toggles && this.toggles.archivingEnabled ? "Enabled" : "Disabled";
   }
 
   get loggingClass() {
@@ -143,20 +221,20 @@ export default class BigotoolDashboard extends LightningElement {
   }
 
   pillClass(on) {
-    const base = 'slds-badge ';
-    return base + (on ? 'slds-theme_success' : 'slds-theme_warning');
+    const base = "slds-badge ";
+    return base + (on ? "slds-theme_success" : "slds-theme_warning");
   }
 
   reduceError(error) {
     if (Array.isArray(error && error.body)) {
-      return error.body.map((e) => e.message).join(', ');
+      return error.body.map((e) => e.message).join(", ");
     }
     if (error && error.body && error.body.message) {
       return error.body.message;
     }
-    if (error && typeof error.message === 'string') {
+    if (error && typeof error.message === "string") {
       return error.message;
     }
-    return 'Unable to load the dashboard.';
+    return "Unable to load the dashboard.";
   }
 }

@@ -38,6 +38,8 @@ const FREQUENCY_OPTIONS = [
   { label: "Custom / Manual", value: "" }
 ];
 
+const MAX_LIST_VIEW_FIELDS = 6;
+
 export default class BigotoolArchiveWizard extends NavigationMixin(LightningElement) {
   steps = STEPS;
   criteriaOptions = CRITERIA_OPTIONS;
@@ -72,6 +74,11 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
   @track allFields = [];
   @track selectedFieldNames = [];
   fieldSearch = "";
+
+  // Step 3 - Fields to archive (stored as Archive_Field__c children)
+  @track selectedArchiveFieldNames = [];
+  archiveFieldSearch = "";
+  maxListViewFields = MAX_LIST_VIEW_FIELDS;
 
   // Step 4 - Schedule
   @track frequency = "0 0 1 * * ?";
@@ -139,6 +146,7 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
       this.ageThresholdDays = detail.ageThresholdDays == null ? 365 : detail.ageThresholdDays;
       this.filterLogic = detail.filterLogic || "";
       this.selectedFieldNames = detail.listViewFields || [];
+      this.selectedArchiveFieldNames = detail.archiveFields || [];
       this.deleteAfterArchive = detail.deleteAfterArchive === true;
       this.batchSize = detail.batchSize == null ? 200 : detail.batchSize;
       this.scheduleCron = detail.scheduleCron || "";
@@ -275,6 +283,7 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
     const term = this.fieldSearch.toLowerCase();
     const selected = new Set(this.selectedFieldNames);
     return this.allFields
+      .filter((f) => f.listViewEligible !== false)
       .filter((f) => !selected.has(f.apiName))
       .filter((f) => !term || f.label.toLowerCase().includes(term) || f.apiName.toLowerCase().includes(term));
   }
@@ -294,11 +303,30 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
     return this.selectedFieldNames.length;
   }
 
+  get listViewLimitReached() {
+    return this.selectedFieldNames.length >= MAX_LIST_VIEW_FIELDS;
+  }
+
+  get listViewLimitHint() {
+    return `${this.selectedFieldNames.length} of ${MAX_LIST_VIEW_FIELDS} columns selected`;
+  }
+
   handleAddField(event) {
     const apiName = event.currentTarget.dataset.value;
-    if (!this.selectedFieldNames.includes(apiName)) {
-      this.selectedFieldNames = [...this.selectedFieldNames, apiName];
+    if (this.selectedFieldNames.includes(apiName)) {
+      return;
     }
+    if (this.selectedFieldNames.length >= MAX_LIST_VIEW_FIELDS) {
+      this.dispatchEvent(
+        new ShowToastEvent({
+          title: "Column limit reached",
+          message: `List views can display at most ${MAX_LIST_VIEW_FIELDS} columns.`,
+          variant: "warning"
+        })
+      );
+      return;
+    }
+    this.selectedFieldNames = [...this.selectedFieldNames, apiName];
   }
 
   handleRemoveField(event) {
@@ -307,6 +335,58 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
     }
     const apiName = event.currentTarget.dataset.value;
     this.selectedFieldNames = this.selectedFieldNames.filter((n) => n !== apiName);
+  }
+
+  // ---- Step 3 (Fields to archive) ----
+  handleArchiveFieldSearch(event) {
+    this.archiveFieldSearch = event.target.value;
+  }
+
+  get availableArchiveFields() {
+    const term = this.archiveFieldSearch.toLowerCase();
+    const selected = new Set(this.selectedArchiveFieldNames);
+    return this.allFields
+      .filter((f) => !selected.has(f.apiName))
+      .filter((f) => !term || f.label.toLowerCase().includes(term) || f.apiName.toLowerCase().includes(term));
+  }
+
+  get selectedArchiveFields() {
+    return this.selectedArchiveFieldNames.map((apiName) => {
+      const meta = this.allFields.find((f) => f.apiName === apiName) || {};
+      return { apiName, label: meta.label || apiName };
+    });
+  }
+
+  get selectedArchiveFieldCount() {
+    return this.selectedArchiveFieldNames.length;
+  }
+
+  get hasArchiveFields() {
+    return this.selectedArchiveFieldNames.length > 0;
+  }
+
+  get clearArchiveDisabled() {
+    return this.selectedArchiveFieldNames.length === 0;
+  }
+
+  handleAddArchiveField(event) {
+    const apiName = event.currentTarget.dataset.value;
+    if (!this.selectedArchiveFieldNames.includes(apiName)) {
+      this.selectedArchiveFieldNames = [...this.selectedArchiveFieldNames, apiName];
+    }
+  }
+
+  handleRemoveArchiveField(event) {
+    const apiName = event.currentTarget.dataset.value;
+    this.selectedArchiveFieldNames = this.selectedArchiveFieldNames.filter((n) => n !== apiName);
+  }
+
+  handleSelectAllArchiveFields() {
+    this.selectedArchiveFieldNames = this.allFields.map((f) => f.apiName);
+  }
+
+  handleClearArchiveFields() {
+    this.selectedArchiveFieldNames = [];
   }
 
   // ---- Step 4 ----
@@ -471,6 +551,15 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
       ageThresholdDays: this.showAge ? Number(this.ageThresholdDays) || null : null,
       filterLogic: this.showFilter ? this.filterLogic : null,
       listViewFields: this.selectedFieldNames,
+      archiveFields: this.selectedArchiveFieldNames,
+      archiveFieldLabels: this.selectedArchiveFieldNames.map((apiName) => {
+        const meta = this.allFields.find((f) => f.apiName === apiName) || {};
+        return meta.label || apiName;
+      }),
+      archiveFieldTypes: this.selectedArchiveFieldNames.map((apiName) => {
+        const meta = this.allFields.find((f) => f.apiName === apiName) || {};
+        return meta.dataType || "STRING";
+      }),
       deleteAfterArchive: this.deleteAfterArchive,
       batchSize: Number(this.batchSize) || 200,
       scheduleCron: this.scheduleCron
@@ -528,6 +617,8 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
     this.dateFieldOptions = [];
     this.selectedFieldNames = [];
     this.fieldSearch = "";
+    this.selectedArchiveFieldNames = [];
+    this.archiveFieldSearch = "";
     this.frequency = "0 0 1 * * ?";
     this.scheduleCron = "0 0 1 * * ?";
     this.batchSize = 200;

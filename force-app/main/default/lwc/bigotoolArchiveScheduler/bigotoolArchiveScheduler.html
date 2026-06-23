@@ -1,0 +1,181 @@
+<template>
+  <lightning-card title="Archive Scheduler" icon-name="utility:event">
+    <lightning-button-icon
+      slot="actions"
+      icon-name="utility:refresh"
+      alternative-text="Refresh"
+      title="Refresh"
+      onclick={handleRefresh}
+      disabled={isBusy}
+    ></lightning-button-icon>
+
+    <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+      <template if:true={isBusy}>
+        <lightning-spinner alternative-text="Working..." size="small"></lightning-spinner>
+      </template>
+
+      <template if:true={error}>
+        <div class="slds-text-color_error slds-m-bottom_small">{error}</div>
+      </template>
+
+      <template if:true={notGenerated}>
+        <div class="slds-box slds-theme_shade slds-text-align_center slds-m-bottom_small">
+          <lightning-icon icon-name="utility:info" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+          Generate the archive metadata before scheduling or running the batch.
+        </div>
+      </template>
+
+      <template if:true={status}>
+        <!-- Status header -->
+        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_medium">
+          <lightning-icon icon-name={statusIcon} size="small" class="slds-m-right_x-small"></lightning-icon>
+          <span class="slds-text-heading_small">Schedule Status</span>
+          <span class={badgeClass}>{stateLabel}</span>
+        </div>
+
+        <!-- Metrics -->
+        <div class="slds-grid slds-wrap slds-gutters slds-m-bottom_medium">
+          <div class="slds-col slds-size_1-of-2 slds-large-size_1-of-4">
+            <div class="metric-tile">
+              <div class="metric-label">Records Archived</div>
+              <div class="metric-value">{totalArchivedDisplay}</div>
+            </div>
+          </div>
+          <div class="slds-col slds-size_1-of-2 slds-large-size_1-of-4">
+            <div class="metric-tile">
+              <div class="metric-label">Last Run</div>
+              <div class="metric-value-sm">
+                <template if:true={status.lastArchiveRun}>
+                  <lightning-formatted-date-time
+                    value={status.lastArchiveRun}
+                    year="numeric"
+                    month="short"
+                    day="2-digit"
+                    hour="2-digit"
+                    minute="2-digit"
+                  ></lightning-formatted-date-time>
+                </template>
+                <template if:false={status.lastArchiveRun}>&mdash;</template>
+              </div>
+            </div>
+          </div>
+          <div class="slds-col slds-size_1-of-2 slds-large-size_1-of-4">
+            <div class="metric-tile">
+              <div class="metric-label">Last Run Status</div>
+              <div class="metric-value-sm">
+                <template if:true={status.lastRunStatus}>{status.lastRunStatus}</template>
+                <template if:false={status.lastRunStatus}>&mdash;</template>
+              </div>
+            </div>
+          </div>
+          <div class="slds-col slds-size_1-of-2 slds-large-size_1-of-4">
+            <div class="metric-tile">
+              <div class="metric-label">Next Scheduled Run</div>
+              <div class="metric-value-sm">
+                <template if:true={status.nextRun}>
+                  <lightning-formatted-date-time
+                    value={status.nextRun}
+                    year="numeric"
+                    month="short"
+                    day="2-digit"
+                    hour="2-digit"
+                    minute="2-digit"
+                  ></lightning-formatted-date-time>
+                </template>
+                <template if:false={status.nextRun}>&mdash;</template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cron detail -->
+        <template if:true={status.cronExpression}>
+          <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_medium">
+            Schedule (cron):
+            <code>{status.cronExpression}</code>
+          </p>
+        </template>
+
+        <!-- Action buttons -->
+        <div class="slds-grid slds-wrap slds-gutters_x-small">
+          <template if:true={canStart}>
+            <div class="slds-col slds-no-flex slds-m-right_x-small slds-m-bottom_x-small">
+              <lightning-button
+                variant="brand"
+                label={startLabel}
+                icon-name="utility:play"
+                onclick={handleStart}
+                disabled={disableActions}
+              ></lightning-button>
+            </div>
+          </template>
+
+          <template if:true={isActive}>
+            <div class="slds-col slds-no-flex slds-m-right_x-small slds-m-bottom_x-small">
+              <lightning-button
+                variant="neutral"
+                label="Pause"
+                icon-name="utility:pause"
+                onclick={handlePauseRequest}
+                disabled={disableActions}
+              ></lightning-button>
+            </div>
+          </template>
+
+          <template if:false={isNotScheduled}>
+            <div class="slds-col slds-no-flex slds-m-right_x-small slds-m-bottom_x-small">
+              <lightning-button
+                variant="destructive-text"
+                label="Delete Schedule"
+                icon-name="utility:delete"
+                onclick={handleDeleteRequest}
+                disabled={disableActions}
+              ></lightning-button>
+            </div>
+          </template>
+
+          <div class="slds-col slds-no-flex slds-m-bottom_x-small">
+            <lightning-button
+              variant="success"
+              label="Run Archive Now"
+              icon-name="utility:rotate"
+              onclick={handleRunRequest}
+              disabled={disableActions}
+            ></lightning-button>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Confirmation modal -->
+    <template if:true={showConfirm}>
+      <section role="dialog" tabindex="-1" class="slds-modal slds-fade-in-open" aria-modal="true">
+        <div class="slds-modal__container">
+          <header class="slds-modal__header">
+            <button
+              class="slds-button slds-button_icon slds-modal__close slds-button_icon-inverse"
+              title="Close"
+              onclick={handleConfirmCancel}
+            >
+              <lightning-icon icon-name="utility:close" size="small" variant="inverse"></lightning-icon>
+            </button>
+            <h2 class="slds-modal__title slds-hyphenate">{confirmTitle}</h2>
+          </header>
+          <div class="slds-modal__content slds-p-around_medium">
+            <p>{confirmMessage}</p>
+          </div>
+          <footer class="slds-modal__footer">
+            <lightning-button variant="neutral" label="Cancel" onclick={handleConfirmCancel}></lightning-button>
+            <lightning-button
+              class="slds-m-left_x-small"
+              variant="brand"
+              label="Confirm"
+              onclick={handleConfirmProceed}
+            ></lightning-button>
+          </footer>
+        </div>
+      </section>
+      <div class="slds-backdrop slds-backdrop_open"></div>
+    </template>
+  </lightning-card>
+</template>
