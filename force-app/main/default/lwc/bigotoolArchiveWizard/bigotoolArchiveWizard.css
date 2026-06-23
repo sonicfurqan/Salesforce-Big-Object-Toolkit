@@ -1,0 +1,13 @@
+.option-list {
+  max-height: 18rem;
+  border: 1px solid #dddbda;
+  border-radius: 0.25rem;
+}
+
+.option-row {
+  cursor: pointer;
+}
+
+.option-row:hover {
+  background-color: #f3f2f2;
+}

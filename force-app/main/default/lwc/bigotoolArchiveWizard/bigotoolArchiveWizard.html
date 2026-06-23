@@ -1,0 +1,380 @@
+<template>
+  <lightning-card title={cardTitle} icon-name="standard:data_streams">
+    <div class="slds-p-horizontal_medium">
+      <lightning-progress-indicator current-step={currentStep} type="path" variant="base">
+        <template for:each={steps} for:item="step">
+          <lightning-progress-step key={step.value} label={step.label} value={step.value}></lightning-progress-step>
+        </template>
+      </lightning-progress-indicator>
+    </div>
+
+    <template if:true={isLoading}>
+      <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+    </template>
+
+    <div class="slds-p-around_medium">
+      <!-- Success state -->
+      <template if:true={saved}>
+        <div class="slds-box slds-theme_success slds-text-align_center">
+          <lightning-icon icon-name="action:approval" size="small"></lightning-icon>
+          <h2 class="slds-text-heading_medium slds-p-top_small">Configuration saved</h2>
+          <p class="slds-p-vertical_small">
+            Archiving for
+            <b>{sourceObject}</b>
+            is configured. Metadata generation is pending.
+          </p>
+          <div class="slds-m-top_small">
+            <lightning-button
+              label="View record"
+              variant="brand"
+              class="slds-m-right_x-small"
+              onclick={navigateToRecord}
+            ></lightning-button>
+            <lightning-button label="Create another" onclick={handleStartOver}></lightning-button>
+          </div>
+        </div>
+      </template>
+
+      <template if:false={saved}>
+        <!-- STEP 1: Object -->
+        <template if:true={isStep1}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 1 · Choose Object</h2>
+          <template if:true={isEditMode}>
+            <div class="slds-box slds-theme_shade">
+              <p class="slds-text-color_weak">Source object (cannot be changed)</p>
+              <p class="slds-text-heading_small slds-m-top_x-small">
+                <b>{sourceObject}</b>
+              </p>
+            </div>
+          </template>
+          <template if:false={isEditMode}>
+            <lightning-input
+              type="search"
+              label="Search objects"
+              placeholder="Search objects…"
+              value={objectSearch}
+              onchange={handleObjectSearch}
+            ></lightning-input>
+            <div class="slds-scrollable_y option-list slds-m-top_small">
+              <template for:each={filteredObjectOptions} for:item="opt">
+                <div
+                  key={opt.value}
+                  class="slds-p-around_x-small slds-border_bottom option-row"
+                  data-value={opt.value}
+                  data-label={opt.label}
+                  onclick={handleObjectSelect}
+                >
+                  <lightning-input
+                    type="radio"
+                    name="objectChoice"
+                    label={opt.label}
+                    value={opt.value}
+                    data-value={opt.value}
+                  ></lightning-input>
+                </div>
+              </template>
+            </div>
+            <template if:true={sourceObject}>
+              <p class="slds-m-top_small slds-text-color_success">
+                Selected:
+                <b>{sourceObject}</b>
+              </p>
+            </template>
+          </template>
+          <lightning-input
+            type="text"
+            class="slds-m-top_medium"
+            label="Configuration Name"
+            value={configName}
+            onchange={handleConfigName}
+          ></lightning-input>
+          <lightning-input
+            type="toggle"
+            class="slds-m-top_small"
+            label="Active"
+            message-toggle-active="Active"
+            message-toggle-inactive="Inactive"
+            checked={isActive}
+            onchange={handleActiveToggle}
+          ></lightning-input>
+        </template>
+
+        <!-- STEP 2: Criteria -->
+        <template if:true={isStep2}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 2 · Define Criteria</h2>
+          <lightning-combobox
+            label="Criteria Type"
+            value={criteriaType}
+            options={criteriaOptions}
+            onchange={handleCriteriaType}
+          ></lightning-combobox>
+
+          <template if:true={showAge}>
+            <div class="slds-grid slds-gutters slds-m-top_small">
+              <div class="slds-col slds-size_1-of-2">
+                <lightning-combobox
+                  label="Age Field (Date/DateTime)"
+                  value={ageField}
+                  options={dateFieldOptions}
+                  onchange={handleAgeField}
+                ></lightning-combobox>
+              </div>
+              <div class="slds-col slds-size_1-of-2">
+                <lightning-input
+                  type="number"
+                  label="Older than (days)"
+                  min="1"
+                  value={ageThresholdDays}
+                  onchange={handleAgeThreshold}
+                ></lightning-input>
+              </div>
+            </div>
+          </template>
+
+          <template if:true={showFilter}>
+            <lightning-textarea
+              class="slds-m-top_small"
+              label="SOQL Filter (WHERE clause)"
+              placeholder="e.g. Status__c = 'Closed' AND Amount > 1000"
+              value={filterLogic}
+              field-level-help="The expression placed after WHERE. Do not include the WHERE keyword."
+              onchange={handleFilterLogic}
+            ></lightning-textarea>
+          </template>
+
+          <div class="slds-m-top_medium">
+            <lightning-button
+              label="Preview matching records"
+              icon-name="utility:preview"
+              onclick={handlePreview}
+            ></lightning-button>
+            <template if:true={hasPreview}>
+              <span class="slds-m-left_small slds-text-color_success slds-text-heading_small">
+                <b>{previewCount}</b>
+                record(s) match.
+              </span>
+            </template>
+            <template if:true={previewError}>
+              <p class="slds-m-top_x-small slds-text-color_error">{previewError}</p>
+            </template>
+          </div>
+        </template>
+
+        <!-- STEP 3: Fields -->
+        <template if:true={isStep3}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 3 · List View Columns</h2>
+          <p class="slds-text-color_weak slds-m-bottom_small">
+            Choose fields to display as columns in the archived object list view.
+          </p>
+          <template if:true={isEditMode}>
+            <p class="slds-text-color_weak slds-m-bottom_small">
+              Existing columns cannot be removed while editing; you may add new ones.
+            </p>
+          </template>
+          <lightning-input
+            type="search"
+            label="Search available fields"
+            value={fieldSearch}
+            onchange={handleFieldSearch}
+          ></lightning-input>
+          <div class="slds-grid slds-gutters slds-m-top_small">
+            <div class="slds-col slds-size_1-of-2">
+              <p class="slds-text-title_caps slds-m-bottom_x-small">Available</p>
+              <div class="slds-scrollable_y option-list">
+                <template for:each={availableFields} for:item="f">
+                  <div
+                    key={f.apiName}
+                    class="slds-grid slds-grid_align-spread slds-p-around_x-small slds-border_bottom"
+                  >
+                    <span>
+                      <b>{f.label}</b>
+                      <span class="slds-text-color_weak">· {f.apiName}</span>
+                    </span>
+                    <lightning-button-icon
+                      icon-name="utility:add"
+                      alternative-text="Add"
+                      data-value={f.apiName}
+                      onclick={handleAddField}
+                    ></lightning-button-icon>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <div class="slds-col slds-size_1-of-2">
+              <p class="slds-text-title_caps slds-m-bottom_x-small">Selected ({selectedFieldCount})</p>
+              <div class="slds-scrollable_y option-list">
+                <template for:each={selectedFields} for:item="f">
+                  <div
+                    key={f.apiName}
+                    class="slds-grid slds-grid_align-spread slds-p-around_x-small slds-border_bottom"
+                  >
+                    <span>
+                      <b>{f.label}</b>
+                      <span class="slds-text-color_weak">· {f.apiName}</span>
+                    </span>
+                    <lightning-button-icon
+                      icon-name="utility:dash"
+                      alternative-text="Remove"
+                      data-value={f.apiName}
+                      onclick={handleRemoveField}
+                      disabled={isEditMode}
+                    ></lightning-button-icon>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- STEP 4: Schedule -->
+        <template if:true={isStep4}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 4 · Schedule &amp; Batch</h2>
+          <lightning-combobox
+            label="Frequency"
+            value={frequency}
+            options={frequencyOptions}
+            onchange={handleFrequency}
+          ></lightning-combobox>
+          <template if:true={isCustomCron}>
+            <lightning-input
+              type="text"
+              class="slds-m-top_small"
+              label="CRON Expression"
+              placeholder="0 0 1 * * ?"
+              value={scheduleCron}
+              field-level-help="Salesforce CRON. Leave blank to run manually only."
+              onchange={handleCron}
+            ></lightning-input>
+          </template>
+          <lightning-input
+            type="number"
+            class="slds-m-top_small"
+            label="Batch Size"
+            min="1"
+            max="10000"
+            value={batchSize}
+            field-level-help="Records processed per batch (default 200)."
+            onchange={handleBatchSize}
+          ></lightning-input>
+          <lightning-input
+            type="checkbox"
+            class="slds-m-top_small"
+            label="Delete source records after successful archive"
+            checked={deleteAfterArchive}
+            onchange={handleDeleteAfter}
+          ></lightning-input>
+        </template>
+
+        <!-- STEP 5: Restore Policy -->
+        <template if:true={isStep5}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 5 · Restore Policy</h2>
+          <lightning-input
+            type="toggle"
+            label="Enable restore profile"
+            message-toggle-active="Enabled"
+            message-toggle-inactive="Disabled"
+            checked={enableRestore}
+            disabled={restoreToggleDisabled}
+            onchange={handleEnableRestore}
+          ></lightning-input>
+          <template if:true={restoreToggleDisabled}>
+            <p class="slds-text-color_weak slds-m-top_xx-small">
+              A restore profile is already configured and cannot be disabled.
+            </p>
+          </template>
+          <template if:true={enableRestore}>
+            <lightning-combobox
+              class="slds-m-top_small"
+              label="Match Field (for deduplication)"
+              value={matchField}
+              options={matchFieldOptions}
+              field-level-help="Only unique fields (and the record Id) can be used to match records on restore."
+              onchange={handleMatchField}
+            ></lightning-combobox>
+            <lightning-combobox
+              class="slds-m-top_small"
+              label="On Conflict"
+              value={onConflict}
+              options={conflictOptions}
+              onchange={handleOnConflict}
+            ></lightning-combobox>
+            <lightning-input
+              type="checkbox"
+              class="slds-m-top_small"
+              label="Reparent owner to current user on restore"
+              checked={reparentOwner}
+              onchange={handleReparentOwner}
+            ></lightning-input>
+            <lightning-input
+              type="checkbox"
+              label="Bypass automation (triggers/flows) on restore"
+              checked={bypassAutomation}
+              onchange={handleBypassAutomation}
+            ></lightning-input>
+          </template>
+        </template>
+
+        <!-- STEP 6: Review -->
+        <template if:true={isStep6}>
+          <h2 class="slds-text-heading_small slds-m-bottom_small">Step 6 · Review &amp; Generate</h2>
+          <dl class="slds-dl_horizontal">
+            <dt class="slds-dl_horizontal__label">Object</dt>
+            <dd class="slds-dl_horizontal__detail">{sourceObject}</dd>
+            <dt class="slds-dl_horizontal__label">Config Name</dt>
+            <dd class="slds-dl_horizontal__detail">{configName}</dd>
+            <dt class="slds-dl_horizontal__label">Status</dt>
+            <dd class="slds-dl_horizontal__detail">{activeSummary}</dd>
+            <dt class="slds-dl_horizontal__label">Criteria</dt>
+            <dd class="slds-dl_horizontal__detail">{criteriaSummary}</dd>
+            <dt class="slds-dl_horizontal__label">List Columns</dt>
+            <dd class="slds-dl_horizontal__detail">{selectedFieldCount} field(s)</dd>
+            <dt class="slds-dl_horizontal__label">Schedule</dt>
+            <dd class="slds-dl_horizontal__detail">{scheduleSummary}</dd>
+            <dt class="slds-dl_horizontal__label">Batch Size</dt>
+            <dd class="slds-dl_horizontal__detail">{batchSize}</dd>
+            <dt class="slds-dl_horizontal__label">Source Cleanup</dt>
+            <dd class="slds-dl_horizontal__detail">{deleteSummary}</dd>
+            <dt class="slds-dl_horizontal__label">Restore</dt>
+            <dd class="slds-dl_horizontal__detail">{restoreSummary}</dd>
+          </dl>
+          <div class="slds-box slds-theme_shade slds-m-top_small">
+            <p class="slds-text-color_weak">
+              Saving captures this configuration. Apex, triggers, the Big Object, batch job, tab and list view are
+              produced by the generation engine (status starts as
+              <b>Pending</b>
+              ).
+            </p>
+          </div>
+        </template>
+      </template>
+    </div>
+
+    <!-- Footer buttons -->
+    <template if:false={saved}>
+      <div slot="footer" class="slds-grid slds-grid_align-spread">
+        <div>
+          <lightning-button
+            label="Previous"
+            onclick={handlePrevious}
+            disabled={isFirstStep}
+            class="slds-m-right_x-small"
+          ></lightning-button>
+          <lightning-button label="Cancel" onclick={handleCancel}></lightning-button>
+        </div>
+        <div>
+          <template if:false={isLastStep}>
+            <lightning-button
+              label="Next"
+              variant="brand"
+              onclick={handleNext}
+              disabled={nextDisabled}
+            ></lightning-button>
+          </template>
+          <template if:true={isLastStep}>
+            <lightning-button label="Generate" variant="brand" onclick={handleGenerate}></lightning-button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </lightning-card>
+</template>

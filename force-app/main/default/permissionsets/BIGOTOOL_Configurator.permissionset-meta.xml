@@ -12,6 +12,14 @@
         <apexClass>BIGOTOOL_DashboardController</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_ArchiveWizardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>BIGOTOOL_FieldLogWizardController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <tabSettings>
         <tab>BIGOTOOL_Dashboard</tab>
         <visibility>Visible</visibility>
@@ -22,10 +30,6 @@
     </tabSettings>
     <tabSettings>
         <tab>Field_Log_Config__c</tab>
-        <visibility>Visible</visibility>
-    </tabSettings>
-    <tabSettings>
-        <tab>Restore_Profile__c</tab>
         <visibility>Visible</visibility>
     </tabSettings>
     <customPermissions>
@@ -120,11 +124,6 @@
     </fieldPermissions>
     <fieldPermissions>
         <field>Archive_Config__c.List_View_Fields__c</field>
-        <editable>true</editable>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
-        <field>Archive_Config__c.Restore_Profile__c</field>
         <editable>true</editable>
         <readable>true</readable>
     </fieldPermissions>

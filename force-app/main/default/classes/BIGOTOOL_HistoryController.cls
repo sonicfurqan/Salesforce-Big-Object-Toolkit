@@ -214,7 +214,6 @@ public without sharing class BIGOTOOL_HistoryController {
 
   @TestVisible
   private static Boolean canExport() {
-    return FeatureManagement.checkPermission('BIGOTOOL_Can_Export') ||
-      FeatureManagement.checkPermission('bigotool__BIGOTOOL_Can_Export');
+    return FeatureManagement.checkPermission('BIGOTOOL_Can_Export');
   }
 }

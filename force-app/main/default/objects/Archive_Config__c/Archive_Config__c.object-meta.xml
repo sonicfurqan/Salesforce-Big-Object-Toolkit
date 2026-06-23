@@ -62,13 +62,19 @@
     </actionOverrides>
     <actionOverrides>
         <actionName>Edit</actionName>
+        <comment>Launch Archive Wizard in edit mode</comment>
+        <content>bigotoolArchiveWizardEditOverride</content>
         <formFactor>Large</formFactor>
-        <type>Default</type>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>LightningComponent</type>
     </actionOverrides>
     <actionOverrides>
         <actionName>Edit</actionName>
+        <comment>Launch Archive Wizard in edit mode</comment>
+        <content>bigotoolArchiveWizardEditOverride</content>
         <formFactor>Small</formFactor>
-        <type>Default</type>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>LightningComponent</type>
     </actionOverrides>
     <actionOverrides>
         <actionName>List</actionName>
@@ -90,13 +96,19 @@
     </actionOverrides>
     <actionOverrides>
         <actionName>New</actionName>
+        <comment>Launch Archive Wizard</comment>
+        <content>bigotoolArchiveWizardOverride</content>
         <formFactor>Large</formFactor>
-        <type>Default</type>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>LightningComponent</type>
     </actionOverrides>
     <actionOverrides>
         <actionName>New</actionName>
+        <comment>Launch Archive Wizard</comment>
+        <content>bigotoolArchiveWizardOverride</content>
         <formFactor>Small</formFactor>
-        <type>Default</type>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>LightningComponent</type>
     </actionOverrides>
     <actionOverrides>
         <actionName>SaveEdit</actionName>

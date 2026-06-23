@@ -100,10 +100,7 @@ public with sharing class BIGOTOOL_FieldLogWizardController {
   }
 
   private static void assertCanConfigure() {
-    if (
-      !FeatureManagement.checkPermission('BIGOTOOL_Can_Configure') &&
-      !FeatureManagement.checkPermission('bigotool__BIGOTOOL_Can_Configure')
-    ) {
+    if (!FeatureManagement.checkPermission('BIGOTOOL_Can_Configure')) {
       throw new AuraHandledException('You do not have permission to configure field history logging.');
     }
   }
