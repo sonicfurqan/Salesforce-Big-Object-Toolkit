@@ -3,7 +3,7 @@
     <fullName>Debug_Mode__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Verbose Archive_Job_Log__b writes.</description>
-    <externalId>false</externalId>
     <label>Debug Mode</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

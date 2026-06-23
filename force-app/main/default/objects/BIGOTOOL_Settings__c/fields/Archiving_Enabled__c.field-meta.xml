@@ -3,7 +3,7 @@
     <fullName>Archiving_Enabled__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Org/profile/user toggle for archiving.</description>
-    <externalId>false</externalId>
     <label>Archiving Enabled</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

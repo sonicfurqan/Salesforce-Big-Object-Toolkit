@@ -3,7 +3,7 @@
     <fullName>Bypass_Automation__c</fullName>
     <defaultValue>true</defaultValue>
     <description>Set a static-bypass flag during restore DML so generated logging/automation does not re-fire.</description>
-    <externalId>false</externalId>
     <label>Bypass Automation</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

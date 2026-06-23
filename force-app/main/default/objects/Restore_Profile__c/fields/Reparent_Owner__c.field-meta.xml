@@ -3,7 +3,7 @@
     <fullName>Reparent_Owner__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Restore the original owner rather than the running user.</description>
-    <externalId>false</externalId>
     <label>Reparent Owner</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

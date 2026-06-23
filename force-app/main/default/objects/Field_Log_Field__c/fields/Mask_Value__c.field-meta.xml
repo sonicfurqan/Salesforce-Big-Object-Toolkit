@@ -3,7 +3,7 @@
     <fullName>Mask_Value__c</fullName>
     <defaultValue>false</defaultValue>
     <description>PII masking: store a hash instead of the raw value.</description>
-    <externalId>false</externalId>
     <label>Mask Value</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

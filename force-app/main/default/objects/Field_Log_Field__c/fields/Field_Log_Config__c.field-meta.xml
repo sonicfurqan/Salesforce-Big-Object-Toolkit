@@ -2,13 +2,13 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Field_Log_Config__c</fullName>
     <description>Parent Field Log Config.</description>
-    <externalId>false</externalId>
     <label>Field Log Config</label>
     <referenceTo>Field_Log_Config__c</referenceTo>
     <relationshipLabel>Field Log Fields</relationshipLabel>
     <relationshipName>Field_Log_Fields</relationshipName>
     <relationshipOrder>0</relationshipOrder>
     <reparentableMasterDetail>false</reparentableMasterDetail>
+    <trackTrending>false</trackTrending>
     <type>MasterDetail</type>
     <writeRequiresMasterRead>false</writeRequiresMasterRead>
 </CustomField>

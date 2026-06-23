@@ -3,7 +3,7 @@
     <fullName>Is_Active__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Enable field history logging for this object.</description>
-    <externalId>false</externalId>
     <label>Is Active</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

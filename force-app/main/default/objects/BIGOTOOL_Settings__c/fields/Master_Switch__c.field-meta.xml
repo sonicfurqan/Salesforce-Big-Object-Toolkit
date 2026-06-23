@@ -3,7 +3,7 @@
     <fullName>Master_Switch__c</fullName>
     <defaultValue>true</defaultValue>
     <description>Global kill-switch for all BIGOTOOL automation.</description>
-    <externalId>false</externalId>
     <label>Master Switch</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

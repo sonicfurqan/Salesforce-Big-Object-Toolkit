@@ -2,9 +2,9 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Generation_Status__c</fullName>
     <description>Status of the metadata generation for this config.</description>
-    <externalId>false</externalId>
     <label>Generation Status</label>
     <required>false</required>
+    <trackTrending>false</trackTrending>
     <type>Picklist</type>
     <valueSet>
         <valueSetDefinition>

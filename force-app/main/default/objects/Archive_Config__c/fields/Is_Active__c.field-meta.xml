@@ -3,7 +3,7 @@
     <fullName>Is_Active__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Master enable for this archive config.</description>
-    <externalId>false</externalId>
     <label>Is Active</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

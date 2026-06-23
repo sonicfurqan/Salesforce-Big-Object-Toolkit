@@ -3,7 +3,7 @@
     <fullName>Delete_After_Archive__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Hard-delete source records after a verified Big Object write.</description>
-    <externalId>false</externalId>
     <label>Delete After Archive</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Index xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>FieldChangeLogIndex</fullName>
-    <label>Field Change Log Index</label>
     <fields>
         <name>ObjectApiName__c</name>
         <sortDirection>ASC</sortDirection>
@@ -18,4 +17,5 @@
         <name>Sequence__c</name>
         <sortDirection>ASC</sortDirection>
     </fields>
+    <label>Field Change Log Index</label>
 </Index>

@@ -3,7 +3,7 @@
     <fullName>Log_On_Undelete__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Capture changes on record undeletion.</description>
-    <externalId>false</externalId>
     <label>Log On Undelete</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

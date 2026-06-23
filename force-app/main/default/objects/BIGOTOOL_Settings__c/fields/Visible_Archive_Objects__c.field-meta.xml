@@ -2,8 +2,8 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Visible_Archive_Objects__c</fullName>
     <description>CSV whitelist of archive object API names this user/profile may view. Blank/null = full access to all archive objects. Non-blank = restricted to only the listed objects.</description>
-    <externalId>false</externalId>
     <label>Visible Archive Objects</label>
     <required>false</required>
+    <trackTrending>false</trackTrending>
     <type>TextArea</type>
 </CustomField>

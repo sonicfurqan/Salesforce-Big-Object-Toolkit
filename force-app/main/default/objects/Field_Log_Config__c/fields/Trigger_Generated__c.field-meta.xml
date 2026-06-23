@@ -3,7 +3,7 @@
     <fullName>Trigger_Generated__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Set by the generator once the field-log trigger exists.</description>
-    <externalId>false</externalId>
     <label>Trigger Generated</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

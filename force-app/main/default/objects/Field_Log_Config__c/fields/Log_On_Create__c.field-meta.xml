@@ -3,7 +3,7 @@
     <fullName>Log_On_Create__c</fullName>
     <defaultValue>false</defaultValue>
     <description>Capture changes on record creation.</description>
-    <externalId>false</externalId>
     <label>Log On Create</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

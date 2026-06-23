@@ -3,7 +3,7 @@
     <fullName>Track_Old_New__c</fullName>
     <defaultValue>true</defaultValue>
     <description>Capture both old and new values.</description>
-    <externalId>false</externalId>
     <label>Track Old/New</label>
+    <trackTrending>false</trackTrending>
     <type>Checkbox</type>
 </CustomField>

@@ -2,8 +2,8 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Visible_Archive_Objects_2__c</fullName>
     <description>Overflow field concatenated with Visible_Archive_Objects__c when a user/profile needs to whitelist more object names than fit in 255 chars.</description>
-    <externalId>false</externalId>
     <label>Visible Archive Objects 2</label>
     <required>false</required>
+    <trackTrending>false</trackTrending>
     <type>TextArea</type>
 </CustomField>
