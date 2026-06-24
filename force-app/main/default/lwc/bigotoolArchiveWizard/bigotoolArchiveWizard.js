@@ -304,7 +304,7 @@ export default class BigotoolArchiveWizard extends NavigationMixin(LightningElem
   }
 
   get listViewLimitReached() {
-    return this.selectedFieldNames.length >= MAX_LIST_VIEW_FIELDS;
+    return this.selectedFieldNames.length >= MAX_LIST_VIEW_FIELDS || !!this.recordId;
   }
 
   get listViewLimitHint() {

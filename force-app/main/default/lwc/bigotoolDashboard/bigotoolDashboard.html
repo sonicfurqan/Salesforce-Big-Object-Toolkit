@@ -5,13 +5,13 @@
       <template if:true={hasData}>
         <span class="slds-text-body_small slds-text-color_weak slds-m-right_x-small">Master Switch</span>
         <span class={masterSwitchClass}>{masterSwitchLabel}</span>
+        <lightning-button
+          label="Settings"
+          icon-name="utility:settings"
+          class="slds-m-left_x-small"
+          onclick={handleOpenSettings}
+        ></lightning-button>
       </template>
-      <lightning-button
-        label="Settings"
-        icon-name="utility:settings"
-        class="slds-m-left_x-small"
-        onclick={handleOpenSettings}
-      ></lightning-button>
       <lightning-button-icon
         icon-name="utility:refresh"
         alternative-text="Refresh"
@@ -32,6 +32,25 @@
       <!-- Error -->
       <template if:true={error}>
         <div class="slds-box slds-theme_error slds-m-bottom_small" role="alert">{error}</div>
+      </template>
+
+      <template if:true={showRemoteSiteSetup}>
+        <section class="slds-box slds-theme_warning slds-m-bottom_small bot-setup" aria-live="polite">
+          <h3 class="slds-text-heading_small slds-m-bottom_x-small">Remote Site Setting Required</h3>
+          <p class="slds-m-bottom_small">
+            Configure a Remote Site Setting for this org before using the dashboard or metadata-driven BIGOTOOL
+            features.
+          </p>
+          <ol class="slds-list_ordered slds-m-left_large slds-m-bottom_small">
+            <li>Open Setup, then go to Remote Site Settings.</li>
+            <li>Create a new entry. The Remote Site Name can be any admin-friendly label.</li>
+            <li>Set the Remote Site URL to {requiredRemoteSiteUrl}.</li>
+            <li>Select Active, save the setting, then refresh this dashboard.</li>
+          </ol>
+          <p class="slds-text-body_small slds-text-color_weak">
+            The URL must match the current org domain exactly so Apex metadata callouts can reach Salesforce.
+          </p>
+        </section>
       </template>
 
       <template if:true={hasData}>

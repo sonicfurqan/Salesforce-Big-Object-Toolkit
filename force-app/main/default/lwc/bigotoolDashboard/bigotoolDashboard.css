@@ -5,3 +5,7 @@
 .bot-kpi .slds-text-heading_large {
   line-height: 1.2;
 }
+
+.bot-setup {
+  border-left: 4px solid var(--slds-g-color-warning-base-50, #dd7a01);
+}

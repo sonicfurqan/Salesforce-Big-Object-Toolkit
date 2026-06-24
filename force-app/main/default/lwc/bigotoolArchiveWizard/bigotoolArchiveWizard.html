@@ -166,13 +166,9 @@
           <p class="slds-text-color_weak slds-m-bottom_xx-small">
             Choose up to {maxListViewFields} fields to display as columns in the archived object list view.
           </p>
-          <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
-            {listViewLimitHint}
-          </p>
+          <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">{listViewLimitHint}</p>
           <template if:true={isEditMode}>
-            <p class="slds-text-color_weak slds-m-bottom_small">
-              Existing columns cannot be removed while editing; you may add new ones.
-            </p>
+            <p class="slds-text-color_weak slds-m-bottom_small">Existing columns cannot be removed while editing.</p>
           </template>
           <lightning-input
             type="search"
@@ -249,8 +245,8 @@
               </div>
             </div>
             <p class="slds-text-color_weak slds-m-bottom_small">
-              Select the source fields whose values will be archived into the Big Object
-              (stored as JSON). These are independent of the list view columns above.
+              Select the source fields whose values will be archived into the Big Object (stored as JSON). These are
+              independent of the list view columns above.
             </p>
             <lightning-input
               type="search"

@@ -116,6 +116,30 @@ private class BIGOTOOL_DashboardControllerTest {
   }
 
   @IsTest
+  static void getDashboard_whenRemoteSiteMissing_returnsSetupState() {
+    BIGOTOOL_RemoteSiteGuard.testRemoteSiteConfigured = false;
+    BIGOTOOL_RemoteSiteGuard.testRequiredRemoteSiteUrl = 'https://example.my.salesforce.com';
+
+    try {
+      Test.startTest();
+      BIGOTOOL_DashboardController.DashboardData data = BIGOTOOL_DashboardController.getDashboard();
+      Test.stopTest();
+
+      System.assertEquals(false, data.remoteSiteConfigured, 'Dashboard should expose missing remote-site state.');
+      System.assertEquals(
+        'https://example.my.salesforce.com',
+        data.requiredRemoteSiteUrl,
+        'Dashboard should return the required org-domain URL.'
+      );
+      System.assertEquals(0, data.config.logTotal, 'Dashboard should short-circuit before loading normal metrics.');
+      System.assertEquals(0, data.jobs.totalRuns, 'Dashboard should short-circuit before loading job history.');
+    } finally {
+      BIGOTOOL_RemoteSiteGuard.testRemoteSiteConfigured = null;
+      BIGOTOOL_RemoteSiteGuard.testRequiredRemoteSiteUrl = null;
+    }
+  }
+
+  @IsTest
   static void getOrgSettings_returnsDefaults() {
     BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
     cs.SetupOwnerId = UserInfo.getOrganizationId();

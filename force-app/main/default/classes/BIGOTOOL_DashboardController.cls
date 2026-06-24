@@ -107,9 +107,13 @@ public with sharing class BIGOTOOL_DashboardController {
 
   public class DashboardData {
     @AuraEnabled
+    public Boolean remoteSiteConfigured = true;
+    @AuraEnabled
+    public String requiredRemoteSiteUrl;
+    @AuraEnabled
     public ConfigSummary config = new ConfigSummary();
     @AuraEnabled
-    public JobSummary jobs = new JobSummary();
+    public JobSummary jobs = new JobSummary();BIGOTOOL_RemoteSiteGuard
     @AuraEnabled
     public TogglesState toggles = new TogglesState();
     @AuraEnabled
@@ -119,10 +123,16 @@ public with sharing class BIGOTOOL_DashboardController {
   @AuraEnabled(cacheable=true)
   public static DashboardData getDashboard() {
     DashboardData data = new DashboardData();
+    BIGOTOOL_RemoteSiteGuard.RemoteSiteCheck remoteSiteCheck = BIGOTOOL_RemoteSiteGuard.checkCurrentOrg();
+    data.remoteSiteConfigured = remoteSiteCheck.isConfigured;
+    data.requiredRemoteSiteUrl = remoteSiteCheck.requiredUrl;
+    data.generatedAt = Datetime.now();
+    if (!data.remoteSiteConfigured) {
+      return data;
+    }
     data.config = loadConfigSummary();
     data.jobs = summarizeJobs(loadJobRecords());
     data.toggles = loadToggles();
-    data.generatedAt = Datetime.now();
     return data;
   }
 

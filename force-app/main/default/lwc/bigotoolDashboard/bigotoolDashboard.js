@@ -130,8 +130,8 @@ export default class BigotoolDashboard extends LightningElement {
         debugMode: !!this.settings.debugMode,
         maxBatchConcurrency:
           this.settings.maxBatchConcurrency === null ||
-          this.settings.maxBatchConcurrency === undefined ||
-          this.settings.maxBatchConcurrency === ""
+            this.settings.maxBatchConcurrency === undefined ||
+            this.settings.maxBatchConcurrency === ""
             ? null
             : this.settings.maxBatchConcurrency
       });
@@ -159,7 +159,11 @@ export default class BigotoolDashboard extends LightningElement {
   }
 
   get hasData() {
-    return !!this.data;
+    return !!this.data && this.data.remoteSiteConfigured !== false;
+  }
+
+  get showRemoteSiteSetup() {
+    return !!this.data && this.data.remoteSiteConfigured === false;
   }
 
   get config() {
@@ -176,6 +180,10 @@ export default class BigotoolDashboard extends LightningElement {
 
   get generatedAt() {
     return this.data ? this.data.generatedAt : null;
+  }
+
+  get requiredRemoteSiteUrl() {
+    return this.data ? this.data.requiredRemoteSiteUrl : null;
   }
 
   get hasRecentJobs() {

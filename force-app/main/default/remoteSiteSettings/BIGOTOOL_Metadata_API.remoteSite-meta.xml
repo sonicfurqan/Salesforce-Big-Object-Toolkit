@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<RemoteSiteSetting xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>Allows the Big Object Tooling generation engine to call the org Metadata API (self callout).</description>
-    <disableProtocolSecurity>false</disableProtocolSecurity>
-    <isActive>true</isActive>
-    <url>https://orgfarm-34b052c506-dev-ed.develop.my.salesforce.com</url>
-</RemoteSiteSetting>

@@ -1,27 +1,27 @@
-# Big Object Tooling Package — Architecture & UI/UX Design
+# Big Object Tooling (BIGOTOOL) — Architecture
 
 **Package name:** Big Object Tooling (BIGOTOOL)
-**Namespace (suggested):** `bigotool`
 **Platform:** Salesforce Platform (Lightning Experience, API v67.0)
-**Purpose:** A managed-style tooling package that lets admins **archive** standard/custom object data into **Big Objects**, **log field change history** into Big Objects, and **restore** archived data — all driven by **point-and-click wizards** that **auto-generate** the Big Objects, Apex, triggers, batch jobs, tabs, list views, and record pages required.
+**Purpose:** An admin tooling package that lets you **archive** standard/custom object data into **Big Objects**, **log field change history** into a universal Big Object, and **restore** archived records — driven by **point-and-click LWC wizards** that **auto-generate** the archive Big Object, its viewer page, tab and access permission set via the Metadata API.
+
+> This document describes what is actually implemented in this repository. Component, class, object, field and index names below match the source under `force-app/main/default`.
 
 ---
 
 ## Table of Contents
 
 1. [Solution Overview](#1-solution-overview)
-2. [High-Level Architecture Flow](#2-high-level-architecture-flow)
-3. [Big Object Schema Definitions](#3-big-object-schema-definitions)
-4. [Configuration Design (Custom Objects & Custom Settings)](#4-configuration-design-custom-objects--custom-settings)
-5. [Automation Components (Apex, Triggers, Batch, Metadata API)](#5-automation-components)
-6. [Auto-Generation Engine (Tabs, List Views, Record Pages)](#6-auto-generation-engine)
-7. [UI/UX Design — Wizards & Viewers](#7-uiux-design)
-8. [App Framework — Unified Lightning App](#8-app-framework)
+2. [High-Level Architecture](#2-high-level-architecture)
+3. [Big Object Schemas](#3-big-object-schemas)
+4. [Configuration Data Model](#4-configuration-data-model)
+5. [Apex Components](#5-apex-components)
+6. [Auto-Generation Engine](#6-auto-generation-engine)
+7. [User Interface (LWC)](#7-user-interface-lwc)
+8. [Lightning App](#8-lightning-app)
 9. [Data Flow Sequences](#9-data-flow-sequences)
 10. [Security Model](#10-security-model)
-11. [Performance, Scale & Data Volume Best Practices](#11-performance-scale--data-volume-best-practices)
-12. [Implementation Roadmap](#12-implementation-roadmap)
-13. [Appendix — Metadata Inventory](#13-appendix--metadata-inventory)
+11. [Scale & Big Object Best Practices](#11-scale--big-object-best-practices)
+12. [Metadata Inventory](#12-metadata-inventory)
 
 ---
 
@@ -29,569 +29,405 @@
 
 ### 1.1 Capabilities
 
-| Capability | Description | Storage |
-|---|---|---|
-| **Field History Logging** | Capture old/new values of selected fields on selected objects (beyond the 20-field / 18-month native limit). | `FieldChangeLog__b` Big Object |
-| **Data Archival** | Move aged/criteria-matched records out of transactional objects into Big Objects to reduce storage & improve performance. | One generated Big Object per source object (e.g., `Archive_Case__b`) |
-| **Data Restore** | Rehydrate archived rows back into the source object (or a clone) on demand. | Source object |
-| **Data Export (CSV)** | Export a single record's full field history, or an entire object's archive, to CSV. Bulk-safe for **millions** of rows; gated by an export permission set. | Salesforce Files / async download |
-| **Configuration Wizards** | Guided, no-code setup of what/when/how to archive and log. | Custom Objects + Custom Settings |
-| **Auto-Generation** | Generate Big Objects, Apex, triggers, batch jobs, tabs, list views, record pages from config. | Metadata API (Tooling/Metadata) |
-| **Unified Viewer App** | Single Lightning app to configure, monitor, and browse archived/logged data. | Lightning App + LWC |
+| Capability                  | Description                                                                                                                                                                             | Storage                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Field History Logging**   | Capture old/new values of selected fields on selected objects (beyond the native 20-field / 18-month limit).                                                                            | `FieldChangeLog__b` (one shared Big Object for all objects)  |
+| **Data Archival**           | Move aged / criteria-matched records out of a source object into a generated Big Object to reduce storage.                                                                              | One generated Big Object per config (e.g. `Archive_Case__b`) |
+| **Data Restore**            | Rehydrate a single archived row back into the source (or a target) object, applying a restore profile.                                                                                  | Source / target object                                       |
+| **CSV Export**              | Export archived rows (optionally filtered by original Id and/or archived-date range) to CSV. **Synchronous**, capped at **50,000 rows**, gated by the `BIGOTOOL_Can_Export` permission. | CSV string returned to the browser                           |
+| **Configuration Wizards**   | Guided, no-code setup of what/when/how to archive and which fields to log.                                                                                                              | Custom objects (standard DML)                                |
+| **Auto-Generation**         | Generate the archive Big Object, Lightning page, tab and permission set from a config record.                                                                                           | Metadata API (via `MetadataService`)                         |
+| **Unified App + Dashboard** | One Lightning app to configure, monitor and browse archived/logged data.                                                                                                                | Lightning App + LWC                                          |
 
 ### 1.2 Design Principles
 
-- **Config over code** — everything an admin does is captured as configuration records (custom objects); code is generated, never hand-written by the admin.
-- **Idempotent generation** — re-running generation reconciles metadata rather than duplicating it.
-- **Big Object index-first** — every query path is designed around the Big Object composite index (no arbitrary filtering).
-- **Asynchronous by default** — all archive/restore/log-flush operations are bulk-safe and async (Batch/Queueable/Platform Events).
-- **Reversible** — archival always supports restore; nothing is destroyed without a verified write.
+- **Config over code** — admins create configuration records; runtime metadata is generated, not hand-written.
+- **Two parallel pipelines** — _Archival_ (`Archive_Config__c` → generated `Archive_*__b`) and _Field History_ (`Field_Log_Config__c` → shared `FieldChangeLog__b`).
+- **Big Object index-first** — every query path follows the composite index left-to-right.
+- **Asynchronous by default** — field logging decouples through a platform event; archival runs in Batch Apex.
+- **Reversible & safe** — archival can delete the source only after a verified Big Object write; restore is always available.
 
 ### 1.3 Why Big Objects
 
-Big Objects store **billions of records** with **horizontal scale**, but trade off flexibility:
+Big Objects store **billions of records** with horizontal scale, but:
 
-- Queried only via **SOQL on the defined index** (in order, left-to-right) or **Async SOQL**.
-- **No triggers, no standard UI, no reports** (until surfaced via custom UI / external objects).
-- **Insert via `Database.insertImmediate()`** or Bulk API; **no update** — records are immutable (re-insert with same index = upsert/overwrite).
-- **Eventually consistent** writes.
+- Are queried only via **SOQL on the defined index** (left-to-right) or **Async SOQL**.
+- Have **no triggers, no standard UI, no reports**.
+- Are written via **`Database.insertImmediate()`** and are **immutable** (re-insert on the same index = overwrite); writes are **eventually consistent**.
 
-The toolkit's job is to **hide this complexity** behind wizards and generated viewers.
+The toolkit hides this complexity behind wizards, a generated viewer page, and a shared history timeline.
 
 ---
 
-## 2. High-Level Architecture Flow
+## 2. High-Level Architecture
 
 ```mermaid
 flowchart TB
-    subgraph ADMIN["👤 Admin / Config Layer"]
-        W1["Archival Config Wizard (LWC)"]
-        W2["Field History Wizard (LWC)"]
-        W3["Feature Toggle Console (LWC)"]
+    subgraph ADMIN["👤 Admin / Config Layer (LWC)"]
+        W1["bigotoolArchiveWizard"]
+        W2["bigotoolFieldLogWizard"]
+        W3["bigotoolDashboard (org toggles)"]
     end
 
-    subgraph META["⚙️ Configuration Store (Custom Objects + CS)"]
-        CFG1["Archive_Config__c"]
-        CFG2["Field_Log_Config__c"]
-        CFG3["Field_Log_Field__c"]
-        CFG4["Restore_Profile__c"]
-        CS1["BIGOTOOL_Settings__c (Hierarchy CS)"]
+    subgraph CFG["⚙️ Configuration Store (Custom Objects + CS)"]
+        C1["Archive_Config__c + Archive_Field__c + Restore_Profile__c"]
+        C2["Field_Log_Config__c + Field_Log_Field__c"]
+        C3["BIGOTOOL_Settings__c (Hierarchy CS)"]
     end
 
-    subgraph GEN["🏗️ Auto-Generation Engine"]
-        MDAPI["Metadata API Service (Apex)"]
-        TPL["Apex/Trigger Template Engine"]
-        UIGEN["UI Generator (Tabs/ListViews/FlexiPages)"]
+    subgraph GEN["🏗️ Generation Engine"]
+        G1["BIGOTOOL_GenerationController"]
+        G2["BIGOTOOL_MetadataGenerator"]
+        G3["MetadataService (SOAP MDAPI client)"]
     end
 
     subgraph RUNTIME["🔁 Runtime Automation"]
-        TRG["Generated Field-History Triggers"]
-        EVT["Change Event Buffer (Platform Event)"]
-        BLOG["Log Flush Queueable"]
-        BARCH["Archive Batch Job (Schedulable)"]
-        BREST["Restore Batch/Queueable"]
+        T1["Generated source trigger → BIGOTOOL_ChangeCapture"]
+        T2["FieldChange__e (Platform Event)"]
+        T3["BIGOTOOL_FieldChangeSubscriber → BIGOTOOL_LogWriter"]
+        T4["BIGOTOOL_ArchiveSchedulable → BIGOTOOL_ArchiveBatch"]
     end
 
     subgraph STORE["🗄️ Big Object Storage"]
-        BO1["FieldChangeLog__b"]
-        BO2["Archive_<Object>__b (generated)"]
+        B1["FieldChangeLog__b"]
+        B2["Archive_*__b (generated)"]
+        B3["Archive_Job_Log__b"]
     end
 
     subgraph VIEW["🖥️ Viewer Layer (LWC)"]
-        V1["Field History Timeline (record page)"]
-        V2["Archive Browser (list + detail)"]
-        V3["Monitoring Dashboard"]
+        V1["bigotoolHistoryTimeline"]
+        V2["bigotoolArchiveListView / bigotoolArchiveRecordView"]
+        V3["bigotoolDashboard"]
     end
 
-    SRC[("Source Objects\n(Std/Custom)")]
+    SRC[("Source Objects")]
 
-    W1 --> CFG1
-    W2 --> CFG2 --> CFG3
-    W3 --> CS1
-    W1 -. triggers .-> GEN
-    W2 -. triggers .-> GEN
+    W1 --> C1 --> G1 --> G2 --> G3 ==> B2
+    W2 --> C2
+    W3 --> C3
 
-    CFG1 --> MDAPI
-    CFG2 --> TPL
-    MDAPI --> TPL --> UIGEN
-
-    TPL ==> TRG
-    UIGEN ==> VIEW
-    MDAPI ==> BO2
-
-    SRC --> TRG --> EVT --> BLOG --> BO1
-    BARCH --> SRC
-    BARCH ==> BO2
-    BO2 --> BREST --> SRC
-
-    BO1 --> V1
-    BO2 --> V2
-    RUNTIME --> V3
+    SRC --> T1 --> T2 --> T3 --> B1
+    T4 --> SRC
+    T4 ==> B2
+    T4 --> B3
+    B2 --> V2
+    B1 --> V1
+    B3 --> V3
 ```
 
 ### 2.1 Three logical planes
 
-1. **Config plane** — Wizards write declarative intent into custom-object config records + CS.
-2. **Generation plane** — A deploy-time/admin-triggered engine reads the config records and emits runtime metadata (Big Objects, Apex, triggers, batch, UI).
-3. **Runtime plane** — Generated triggers/batch jobs move data; LWC viewers read it back.
+1. **Config plane** — Wizards write declarative intent into custom-object records (standard DML).
+2. **Generation plane** — `BIGOTOOL_GenerationController` → `BIGOTOOL_MetadataGenerator` reads an `Archive_Config__c` and emits the archive Big Object, Lightning page, tab and permission set through the Metadata API.
+3. **Runtime plane** — Generated triggers + platform event move field history; Batch Apex moves archived rows; LWC viewers read the data back.
 
 ---
 
-## 3. Big Object Schema Definitions
+## 3. Big Object Schemas
 
-### 3.1 `FieldChangeLog__b` — Universal Field History Big Object
+### 3.1 `FieldChangeLog__b` — Universal Field History
 
-A **single shared** Big Object captures field history for **all** configured objects. The composite index is engineered so the most common query — "show me the history for *this* record, newest first" — hits the index directly.
+A **single shared** Big Object captures field history for **all** configured objects.
 
-| Field API Name | Type | Length | Role | Index Position |
-|---|---|---|---|---|
-| `ObjectApiName__c` | Text | 80 | Source SObject (e.g., `Account`) | **1** |
-| `RecordId__c` | Text | 18 | Source record Id | **2** |
-| `ChangedDateTime__c` | Date/Time | — | When change occurred (UTC) | **3 (DESC)** |
-| `Sequence__c` | Number(18,0) | — | Tie-breaker for same-instant changes | **4** |
-| `FieldApiName__c` | Text | 80 | Field that changed | — |
-| `FieldLabel__c` | Text | 80 | Display label snapshot | — |
-| `OldValue__c` | Long Text | 32768 | Prior value (stringified) | — |
-| `NewValue__c` | Long Text | 32768 | New value (stringified) | — |
-| `ChangedByUserId__c` | Text | 18 | User who made the change | — |
-| `ChangeType__c` | Text | 20 | Create / Update / Delete / Undelete | — |
-| `TransactionId__c` | Text | 36 | Groups all field changes in one DML | — |
+| Field API Name       | Type                                 | Index Position |
+| -------------------- | ------------------------------------ | -------------- |
+| `ObjectApiName__c`   | Text                                 | **1 (ASC)**    |
+| `RecordId__c`        | Text                                 | **2 (ASC)**    |
+| `ChangedDateTime__c` | Date/Time                            | **3 (DESC)**   |
+| `Sequence__c`        | Number                               | **4 (ASC)**    |
+| `FieldApiName__c`    | Text                                 | —              |
+| `FieldLabel__c`      | Text                                 | —              |
+| `OldValue__c`        | Long Text                            | —              |
+| `NewValue__c`        | Long Text                            | —              |
+| `ChangedByUserId__c` | Text                                 | —              |
+| `ChangeType__c`      | Text (Create/Update/Delete/Undelete) | —              |
+| `TransactionId__c`   | Text                                 | —              |
 
-**Index definition (order matters):**
-```
-Index: ObjectApiName__c, RecordId__c, ChangedDateTime__c DESC, Sequence__c
-```
+**Index (`FieldChangeLogIndex`):** `ObjectApiName__c, RecordId__c, ChangedDateTime__c DESC, Sequence__c`
 
-> **Why one shared BO vs. one-per-object?**
-> A shared log avoids Big Object proliferation (limit considerations) and a uniform viewer. The leading `ObjectApiName__c + RecordId__c` keys make per-record queries efficient. Use a **per-object archive** Big Object (below) but a **shared field-log** Big Object.
+This leading key makes the most common query — "history for _this_ record, newest first" — hit the index directly:
 
-**Representative SOQL (index-aligned):**
 ```sql
 SELECT FieldLabel__c, OldValue__c, NewValue__c, ChangedDateTime__c, ChangedByUserId__c
 FROM FieldChangeLog__b
 WHERE ObjectApiName__c = :objName AND RecordId__c = :recId
 ORDER BY ChangedDateTime__c DESC, Sequence__c DESC
-LIMIT 200
 ```
 
-### 3.2 `Archive_<Object>__b` — Generated Per-Object Archive Big Object
+### 3.2 `Archive_*__b` — Generated Per-Config Archive Big Object
 
-For each archived source object, the generator creates a dedicated Big Object that **mirrors selected source fields** plus archival metadata. Example for `Case` → `Archive_Case__b`:
+`BIGOTOOL_MetadataGenerator` creates one Big Object per `Archive_Config__c`. Rather than mirroring every source field, the full record snapshot is stored as JSON split across three Long Text columns; only the admin-flagged **list-view** fields become their own queryable columns.
 
-| Field API Name | Type | Role | Index Position |
-|---|---|---|---|
-| `OriginalId__c` | Text(18) | Source record Id (restore key) | **2** |
-| `ArchivedDate__c` | Date/Time | When archived | **3 (DESC)** |
-| `SourceObject__c` | Text(80) | Redundant label for shared viewer | **1** |
-| `OwnerId__c` | Text(18) | Original owner | — |
-| `CreatedDateOriginal__c` | Date/Time | Original CreatedDate | — |
-| `Payload__c` | Long Text(131072) | **JSON snapshot of full record** (all fields) | — |
-| `<MappedField_1>__c ... <MappedField_N>__c` | Mirrors source types | Indexed/queryable columns for list views | — |
-| `ArchiveBatchId__c` | Text(18) | AsyncApexJob Id for traceability | — |
+| Field API Name       | Type                | Role                                                              | Index Position |
+| -------------------- | ------------------- | ----------------------------------------------------------------- | -------------- |
+| `OriginalId__c`      | Text(18), required  | Source record Id (restore key)                                    | **1 (ASC)**    |
+| `ArchivedDate__c`    | Date/Time, required | When archived                                                     | **2 (DESC)**   |
+| `FieldData__c`       | Long Text           | Primary JSON snapshot of the record                               | —              |
+| `LongTextData__c`    | Long Text           | Overflow for long-text field values                               | —              |
+| `OverflowData__c`    | Long Text           | Additional overflow chunk                                         | —              |
+| `<ListViewField>__c` | Text(255)           | One column per flagged list-view field, for direct display/filter | —              |
 
-**Index definition:**
-```
-Index: SourceObject__c, OriginalId__c, ArchivedDate__c DESC
-```
+**Index (`Archive Index`):** `OriginalId__c ASC, ArchivedDate__c DESC`
 
-> **Hybrid storage pattern:** Store a **full JSON snapshot** in `Payload__c` (guarantees lossless restore even if schema drifts), **plus** flatten the admin-selected "list view" fields into typed columns for browsing/filtering. The JSON is the source of truth for restore; the columns are for display.
+> **Hybrid storage:** the JSON columns are the source of truth for the record viewer and restore (lossless even if the source schema drifts); the flat Text(255) columns exist only so the list view can show/sort columns without parsing JSON.
 
-### 3.3 `Archive_Job_Log__b` — Operational Audit Big Object
+### 3.3 `Archive_Job_Log__b` — Operational Audit
 
-Immutable run history for archive/restore/flush jobs (high volume, long retention).
+Immutable run history for archive jobs, surfaced on the dashboard.
 
-| Field | Type | Index |
-|---|---|---|
-| `ConfigName__c` Text(80) | 1 |
-| `RunDateTime__c` Date/Time DESC | 2 |
-| `JobType__c` Text(20) (Archive/Restore/Flush/Export) | 3 |
-| `Status__c`, `RecordsProcessed__c`, `RecordsFailed__c`, `ErrorSummary__c` LongText, `AsyncJobId__c` | — |
+| Field                                                                                      | Type      | Index        |
+| ------------------------------------------------------------------------------------------ | --------- | ------------ |
+| `ConfigName__c`                                                                            | Text      | **1 (ASC)**  |
+| `RunDateTime__c`                                                                           | Date/Time | **2 (DESC)** |
+| `JobType__c`                                                                               | Text      | **3 (ASC)**  |
+| `Status__c`, `RecordsProcessed__c`, `RecordsFailed__c`, `ErrorSummary__c`, `AsyncJobId__c` | —         | —            |
+
+**Index (`ArchiveJobLogIndex`):** `ConfigName__c, RunDateTime__c DESC, JobType__c`
 
 ---
 
-## 4. Configuration Design (Custom Objects & Custom Settings)
+## 4. Configuration Data Model
 
-**Strategy:** Use **Custom Objects** for *runtime-editable structural config* (what to archive, which fields to log) so wizards can create/update/delete config rows with **standard DML** (no Metadata API deploy needed to add a config), and **Hierarchy Custom Settings** for *environment-specific toggles* (on/off, per-profile overrides) that admins flip instantly. Custom objects also unlock **list views, reports, validation rules, field history, and record-level sharing** on the configuration data itself.
-
-> **Why custom objects instead of CMDT here?** Config rows are created/edited frequently by wizards at runtime and benefit from standard CRUD, SOQL filtering, related lists, and per-record sharing. CMDT would require a Metadata API deploy for every new config row; custom objects let the wizards persist via ordinary `insert`/`update`. Each object below uses a **`Name`** field (Auto Number or Text) as its record identifier and standard `Id` for relationships.
+Configuration uses **custom objects** (runtime CRUD via wizards) for structure, and a **hierarchy custom setting** for instant on/off toggles.
 
 ### 4.1 `Archive_Config__c` — Object Archival Definition
 
-| Field | Type | Purpose |
-|---|---|---|
-| `Name` | Text/Auto Number | Unique config label (e.g., `Case_Archive`) |
-| `Source_Object__c` | Text | API name of object to archive |
-| `Big_Object_Api_Name__c` | Text | Generated BO (e.g., `Archive_Case__b`) |
-| `Is_Active__c` | Checkbox | Master enable for this config |
-| `Criteria_Type__c` | Picklist | `Age` / `SOQL_Filter` / `Both` |
-| `Age_Field__c` | Text | Date field for age (e.g., `ClosedDate`) |
-| `Age_Threshold_Days__c` | Number | Archive when older than N days |
-| `Filter_Logic__c` | Long Text | SOQL `WHERE` fragment (validated, parameterized) |
-| `Delete_After_Archive__c` | Checkbox | Hard-delete source after verified write |
-| `Batch_Size__c` | Number | Scope size (default 200; 1–2000) |
-| `Schedule_Cron__c` | Text | CRON expression for scheduled run |
-| `List_View_Fields__c` | Long Text | CSV of fields flattened to BO columns |
-| `Restore_Profile__c` | Lookup → `Restore_Profile__c` | How to restore |
-| `Generation_Status__c` | Picklist | `Pending` / `Generated` / `Error` |
+| Field                       | Type      | Purpose                                                           |
+| --------------------------- | --------- | ----------------------------------------------------------------- |
+| `Source_Object__c`          | Text      | API name of object to archive                                     |
+| `Big_Object_Api_Name__c`    | Text      | Generated BO API name (e.g. `Archive_Case__b`)                    |
+| `Is_Active__c`              | Checkbox  | Enable this config                                                |
+| `Criteria_Type__c`          | Picklist  | `Age` / `SOQL_Filter` / `Both`                                    |
+| `Age_Field__c`              | Text      | Date field used for age criteria                                  |
+| `Age_Threshold_Days__c`     | Number    | Archive when older than N days                                    |
+| `Filter_Logic__c`           | Long Text | SOQL `WHERE` fragment                                             |
+| `Delete_After_Archive__c`   | Checkbox  | Delete source rows after a verified write                         |
+| `Batch_Size__c`             | Number    | Batch scope size                                                  |
+| `Schedule_Cron__c`          | Text      | CRON expression for the scheduled job                             |
+| `Schedule_Paused__c`        | Checkbox  | Pause the schedule without deleting it                            |
+| `Last_Archive_Run__c`       | Date/Time | Last run timestamp                                                |
+| `Last_Run_Status__c`        | Text      | Last run outcome                                                  |
+| `Total_Records_Archived__c` | Number    | Cumulative archived count                                         |
+| `List_View_Fields__c`       | Long Text | Legacy CSV of list-view fields (superseded by `Archive_Field__c`) |
+| `Generation_Status__c`      | Picklist  | `Pending` / `Generated` / `Error`                                 |
 
-### 4.2 `Field_Log_Config__c` — Object-Level Field History Definition
+### 4.2 `Archive_Field__c` — Field Selection (child of `Archive_Config__c`)
 
-| Field | Type | Purpose |
-|---|---|---|
-| `Name` | Text/Auto Number | Config label (e.g., `Account_FieldLog`) |
-| `Source_Object__c` | Text | Object to track |
-| `Is_Active__c` | Checkbox | Enable logging for object |
-| `Log_On_Create__c` / `Log_On_Delete__c` / `Log_On_Undelete__c` | Checkbox | Event scope |
-| `Async_Mode__c` | Picklist | `PlatformEvent` / `Queueable` / `Synchronous` |
-| `Retention_Days__c` | Number | TTL for purge job (0 = infinite) |
-| `Trigger_Generated__c` | Checkbox | Set by generator |
+Master-detail child describing which source fields are captured and which are flattened into list-view columns.
 
-### 4.3 `Field_Log_Field__c` — Field-Level Selection (child)
+| Field               | Type          | Purpose                                             |
+| ------------------- | ------------- | --------------------------------------------------- |
+| `Archive_Config__c` | Master-Detail | Parent config                                       |
+| `Field_API_Name__c` | Text          | Source field captured in the snapshot               |
+| `Field_Label__c`    | Text          | Display label                                       |
+| `Field_Type__c`     | Text          | Source field type                                   |
+| `Is_List_View__c`   | Checkbox      | Materialize this field as its own Big Object column |
 
-| Field | Type | Purpose |
-|---|---|---|
-| `Field_Log_Config__c` | Master-Detail → `Field_Log_Config__c` | Parent |
-| `Field_Api_Name__c` | Text | Field to track |
-| `Track_Old_New__c` | Checkbox | Capture both values |
-| `Mask_Value__c` | Checkbox | PII masking (store hash, not value) |
+### 4.3 `Restore_Profile__c` — Restore Behavior (child of `Archive_Config__c`)
 
-> **Configurable storage of field-level vs object-level settings** is achieved by the **master-detail** relationship from the parent (`Field_Log_Config__c`, object-level) to the child (`Field_Log_Field__c`, field-level). Master-detail gives cascade delete and roll-up summaries (e.g., count of tracked fields) and cleanly separates the two scopes the requirement calls out.
+Master-detail child that defines how a restore is applied.
 
-### 4.4 `Restore_Profile__c` — Restore Behavior
+| Field                  | Type          | Purpose                                                |
+| ---------------------- | ------------- | ------------------------------------------------------ |
+| `Archive_Config__c`    | Master-Detail | Parent config                                          |
+| `Target_Object__c`     | Text          | Object to restore into (defaults to the source object) |
+| `Match_Field__c`       | Text          | Dedupe / upsert key                                    |
+| `On_Conflict__c`       | Picklist      | `Skip` / `Overwrite` / `Clone`                         |
+| `Reparent_Owner__c`    | Checkbox      | Restore the original owner                             |
+| `Bypass_Automation__c` | Checkbox      | Suppress automation during restore DML                 |
 
-| Field | Type | Purpose |
-|---|---|---|
-| `Name` | Text/Auto Number | Profile label (e.g., `Case_Default`) |
-| `Target_Object__c` | Text | Usually the original object |
-| `Match_Field__c` | Text | Dedupe key (default `OriginalId__c` → external Id) |
-| `On_Conflict__c` | Picklist | `Skip` / `Overwrite` / `Clone` |
-| `Reparent_Owner__c` | Checkbox | Restore original owner vs. running user |
-| `Bypass_Automation__c` | Checkbox | Set a static-bypass flag during restore DML |
+### 4.4 `Field_Log_Config__c` — Object-Level Field History Definition
 
-### 4.5 `BIGOTOOL_Settings__c` — Hierarchy Custom Setting (runtime toggles)
+| Field                                                                               | Type     | Purpose                                                     |
+| ----------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------- |
+| `Source_Object__c` / `Source_Object_Label__c`                                       | Text     | Object to track                                             |
+| `Is_Active__c`                                                                      | Checkbox | Enable logging for the object                               |
+| `Async_Mode__c`                                                                     | Picklist | `PlatformEvent` (recommended) / `Queueable` / `Synchronous` |
+| `Log_On_Create__c` / `Log_On_Update__c` / `Log_On_Delete__c` / `Log_On_Undelete__c` | Checkbox | Event scope                                                 |
+| `Retention_Days__c`                                                                 | Number   | TTL hint for purge                                          |
+| `Trigger_Generated__c`                                                              | Checkbox | Set once the trigger has been created                       |
 
-| Field | Type | Purpose |
-|---|---|---|
-| `Master_Switch__c` | Checkbox | Global kill-switch for all BIGOTOOL automation |
-| `Logging_Enabled__c` | Checkbox | Org-wide logging toggle (org/profile/user level) |
-| `Archiving_Enabled__c` | Checkbox | Org-wide archiving toggle |
-| `Max_Batch_Concurrency__c` | Number | Throttle simultaneous archive jobs |
-| `Debug_Mode__c` | Checkbox | Verbose `Archive_Job_Log__b` writes |
+### 4.5 `Field_Log_Field__c` — Field Selection (child of `Field_Log_Config__c`)
 
-> **Archive visibility is governed by permission sets, not custom settings.** When a config is generated, `BIGOTOOL_MetadataGenerator` creates a dedicated `BIGOTOOL_Archive_<Object>` permission set granting read on that Big Object (object + FLS) and visibility of its tab. Assign the relevant generated permission set(s) to a user/profile to control exactly which archive objects they can see. (The former `Visible_Archive_Objects__c` / `Visible_Archive_Objects_2__c` CSV-whitelist fields have been removed.)
+| Field                                  | Type          | Purpose                                             |
+| -------------------------------------- | ------------- | --------------------------------------------------- |
+| `Field_Log_Config__c`                  | Master-Detail | Parent config                                       |
+| `Field_Api_Name__c` / `Field_Label__c` | Text          | Field to track                                      |
+| `Track_Old_New__c`                     | Checkbox      | Capture both old and new values                     |
+| `Mask_Value__c`                        | Checkbox      | Store a SHA-256 hash instead of the raw value (PII) |
 
-> **Custom Object vs CS division of labor:** Custom Objects = *structure & intent* (runtime CRUD via wizards, list views, reports, validation, per-record sharing). Hierarchy CS = *operational switches* (instant on/off per org/profile/user, no record edit). This satisfies "feature toggles per object" (config `Is_Active__c`) **and** "global/contextual toggles" (CS).
+### 4.6 `BIGOTOOL_Settings__c` — Hierarchy Custom Setting
+
+| Field                      | Type     | Purpose                               |
+| -------------------------- | -------- | ------------------------------------- |
+| `Master_Switch__c`         | Checkbox | Global kill-switch for all automation |
+| `Logging_Enabled__c`       | Checkbox | Org-wide field-logging toggle         |
+| `Archiving_Enabled__c`     | Checkbox | Org-wide archiving toggle             |
+| `Max_Batch_Concurrency__c` | Number   | Throttle simultaneous archive batches |
+| `Debug_Mode__c`            | Checkbox | Verbose logging                       |
+
+### 4.7 `FieldChange__e` — Platform Event
+
+Mirrors the `FieldChangeLog__b` payload fields (`ObjectApiName__c`, `RecordId__c`, `FieldApiName__c`, `FieldLabel__c`, `OldValue__c`, `NewValue__c`, `ChangeType__c`, `ChangedDateTime__c`, `ChangedByUserId__c`, `TransactionId__c`, `Sequence__c`). Used to decouple Big Object writes from the originating transaction.
 
 ---
 
-## 5. Automation Components
+## 5. Apex Components
 
 ### 5.1 Component map
 
 ```mermaid
 flowchart LR
     subgraph Generation
-        A["BIGOTOOL_MetadataService\n(Metadata API wrapper)"]
-        B["BIGOTOOL_TemplateEngine\n(merges config records → Apex source)"]
-        C["BIGOTOOL_DeployService\n(Metadata.DeployContainer)"]
+        GC["BIGOTOOL_GenerationController"]
+        MG["BIGOTOOL_MetadataGenerator"]
+        MS["MetadataService (SOAP client)"]
     end
-    subgraph Runtime_Logging
-        D["Generated: <Obj>FieldLogTrigger"]
-        E["BIGOTOOL_ChangeCapture\n(reusable handler)"]
-        F["BIGOTOOL_LogFlushQueueable\n→ insertImmediate"]
+    subgraph FieldHistory
+        CC["BIGOTOOL_ChangeCapture"]
+        DF["BIGOTOOL_Differ"]
+        EP["BIGOTOOL_EventPublisher"]
+        SUB["BIGOTOOL_FieldChangeSubscriber (trigger)"]
+        LFQ["BIGOTOOL_LogFlushQueueable"]
+        LW["BIGOTOOL_LogWriter"]
+        CR["BIGOTOOL_ConfigRepo"]
+        TG["BIGOTOOL_Toggles"]
     end
-    subgraph Runtime_Archival
-        G["BIGOTOOL_ArchiveScheduler\n(Schedulable)"]
-        H["BIGOTOOL_ArchiveBatch\n(Batchable, stateful)"]
-        I["BIGOTOOL_RestoreQueueable"]
+    subgraph Archival
+        SCH["BIGOTOOL_ArchiveSchedulable"]
+        BAT["BIGOTOOL_ArchiveBatch"]
+        GRD["BIGOTOOL_ArchiveGuard"]
     end
-    A --> B --> C
-    D --> E --> F
-    G --> H
+    subgraph Read_APIs
+        AVC["BIGOTOOL_ArchiveViewController (view/export/restore)"]
+        HC["BIGOTOOL_HistoryController"]
+        DC["BIGOTOOL_DashboardController"]
+        SC["BIGOTOOL_SchedulerController"]
+    end
+    GC --> MG --> MS
+    CC --> DF
+    CC --> EP
+    CC --> LFQ
+    EP --> SUB --> LW
+    LFQ --> LW
+    SCH --> BAT
+    GRD --> BAT
 ```
 
-### 5.2 Field-history runtime (generated trigger pattern)
+### 5.2 Field-history runtime
 
-The generator emits a **thin trigger** per object that delegates to a **single reusable handler** (`BIGOTOOL_ChangeCapture`). The handler reads `Field_Log_Config__c`/`Field_Log_Field__c`, diffs `Trigger.oldMap` vs `Trigger.newMap`, and publishes results.
+A **thin trigger** on each tracked source object delegates to the reusable handler `BIGOTOOL_ChangeCapture`. The trigger source is **generated for the admin to deploy** via the `bigotoolGenerateTriggerCode` component (it is not auto-deployed by the Metadata API).
 
 ```apex
-// GENERATED — do not edit. Source: Field_Log_Config__c[Account]
-trigger AccountFieldLogTrigger on Account (after insert, after update, after delete, after undelete) {
-    BIGOTOOL_ChangeCapture.run('Account', Trigger.operationType, Trigger.oldMap, Trigger.newMap);
+// Example generated trigger (admin deploys this on the source object)
+trigger AccountFieldLogTrigger on Account(after insert, after update, after delete, after undelete) {
+  BIGOTOOL_ChangeCapture.run('Account', Trigger.operationType, Trigger.oldMap, Trigger.newMap);
 }
 ```
 
-```apex
-public with sharing class BIGOTOOL_ChangeCapture {
-    public static void run(String objName, System.TriggerOperation op,
-                           Map<Id,SObject> oldMap, Map<Id,SObject> newMap) {
-        if (!BIGOTOOL_Toggles.loggingEnabled(objName)) return;          // CS + config gate
-        List<FieldChangeLog__b> logs = BIGOTOOL_Differ.diff(objName, op, oldMap, newMap);
-        if (logs.isEmpty()) return;
-        switch on BIGOTOOL_Toggles.asyncMode(objName) {
-            when 'PlatformEvent' { BIGOTOOL_EventPublisher.publish(logs); }     // decouple from txn
-            when 'Queueable'     { System.enqueueJob(new BIGOTOOL_LogFlushQueueable(logs)); }
-            when else            { Database.insertImmediate(logs); }       // sync (small vol)
-        }
-    }
-}
-```
+`BIGOTOOL_ChangeCapture.run(...)`:
 
-> **Why Platform Event default:** Big Object writes use `insertImmediate` which **cannot run in the same context as standard DML that may roll back**. Publishing a Platform Event (`FieldChange__e`) decouples the write, prevents trigger-side failures from blocking the user's save, and naturally bulkifies via a subscriber.
+1. Gates on `BIGOTOOL_Toggles` (master switch + `Logging_Enabled__c` + the object's `Field_Log_Config__c`).
+2. Reads tracked fields via `BIGOTOOL_ConfigRepo` and diffs `oldMap`/`newMap` via `BIGOTOOL_Differ` into `FieldChangeLog__b` rows (masking values flagged `Mask_Value__c`).
+3. Routes by `Async_Mode__c`:
+   - **PlatformEvent** → `BIGOTOOL_EventPublisher.publish(...)` fires `FieldChange__e`; the `BIGOTOOL_FieldChangeSubscriber` trigger persists rows via `BIGOTOOL_LogWriter.write(...)` (`insertImmediate`) after the transaction commits.
+   - **Queueable** → `BIGOTOOL_LogFlushQueueable` writes asynchronously through `BIGOTOOL_LogWriter`.
+   - **Synchronous** → `BIGOTOOL_LogWriter.write(...)` runs inline.
+
+> **Why a platform event by default:** Big Object writes use `insertImmediate`, which cannot safely participate in a transaction that may roll back. The event decouples the write so a logging failure never blocks the user's save.
 
 ### 5.3 Archival runtime
 
-```apex
-public class BIGOTOOL_ArchiveBatch implements Database.Batchable<SObject>, Database.Stateful {
-    private Archive_Config__c cfg;
-    private Integer processed = 0, failed = 0;
+`BIGOTOOL_ArchiveBatch` (`Database.Batchable`, `Database.Stateful`) is driven by an `Archive_Config__c`:
 
-    public BIGOTOOL_ArchiveBatch(String configName) {
-        this.cfg = BIGOTOOL_ConfigRepo.archiveConfig(configName);
-    }
-    public Database.QueryLocator start(Database.BatchableContext bc) {
-        return Database.getQueryLocator(BIGOTOOL_QueryBuilder.archiveQuery(cfg)); // age + filter
-    }
-    public void execute(Database.BatchableContext bc, List<SObject> scope) {
-        List<SObject> bigObjs = BIGOTOOL_Mapper.toBigObject(cfg, scope);  // JSON payload + columns
-        List<Database.SaveResult> srs = Database.insertImmediate(bigObjs);
-        Set<Id> verified = BIGOTOOL_Verify.confirmWritten(cfg, scope, srs); // read-back check
-        if (cfg.Delete_After_Archive__c) {
-            delete [SELECT Id FROM ... WHERE Id IN :verified];          // only verified rows
-        }
-        processed += verified.size();
-    }
-    public void finish(Database.BatchableContext bc) {
-        BIGOTOOL_JobLogger.write(cfg, 'Archive', processed, failed, bc.getJobId());
-    }
-}
-```
+- `start()` builds the source query from age and/or filter criteria.
+- `execute()` serialises each record to the JSON columns, writes to the generated Big Object via `Database.insertImmediate`, and — when `Delete_After_Archive__c` is set — deletes source rows **only after a verified read-back**.
+- `finish()` writes a run summary to `Archive_Job_Log__b`.
 
-**Key safety rule:** Source rows are deleted **only after a verified read-back** from the Big Object (eventual-consistency-safe), preventing data loss.
+`BIGOTOOL_ArchiveSchedulable` is the `Schedulable` wrapper that launches the batch. `BIGOTOOL_ArchiveGuard` performs a pre-flight check (toggles + concurrency vs. the flex-queue ceiling) before a batch is queued.
 
 ### 5.4 Restore runtime
 
-`BIGOTOOL_RestoreQueueable` reads `Archive_<Obj>__b` by index (`SourceObject__c + OriginalId__c`), deserializes `Payload__c`, applies `Restore_Profile__c` conflict rules, optionally sets a **bypass flag** so generated logging/automation doesn't re-fire, and upserts on the `OriginalId__c` external Id.
+Restore is **synchronous and single-record**, exposed by `BIGOTOOL_ArchiveViewController.restoreRecord(configId, originalId, archivedDate)`:
 
-### 5.5 Generation engine (Apex Metadata API)
+1. Verifies the `BIGOTOOL_Can_Restore` custom permission (also surfaced to the UI via `canRestore()`).
+2. Reads the archived row by index, deserialises the JSON snapshot and coerces values back to native field types.
+3. Applies the related `Restore_Profile__c` (target object, match field, `On_Conflict__c`, owner reparenting, automation bypass) and upserts into the target object.
 
-`BIGOTOOL_MetadataService` uses `Metadata.Operations.enqueueDeployment` with a `Metadata.DeployContainer` to create, from the config records:
+### 5.5 Generation engine
 
-- The Big Object (`CustomObject` with `deploymentStatus`, plus `Index` definition).
-- Generated columns + index.
-- Apex trigger + (if needed) handler config.
-- CustomTab, ListView, FlexiPage (record page), and a Lightning App update.
-
-Big Object **definitions are deployed via the Metadata API** (`*.object-meta.xml` with `<indexes>`); the engine writes these to a `DeployContainer`. Configuration records (`Archive_Config__c`, `Field_Log_Config__c`, etc.) are persisted by the wizards with **standard DML** — no Metadata API deploy is needed to add or edit a config, only to generate the runtime metadata it describes.
+`BIGOTOOL_GenerationController.generate(configId)` validates the config is `Pending`, calls `BIGOTOOL_MetadataGenerator.generate(config)`, then flips `Generation_Status__c` to `Generated` or `Error`. `BIGOTOOL_MetadataGenerator` uses the bundled **`MetadataService`** SOAP client (Salesforce Labs apex-mdapi) and authenticates with the session Id exposed by the `BIGOTOOL_SessionId` Visualforce page; the `BIGOTOOL_Metadata_API` Remote Site Setting must point at the org's My Domain.
 
 ---
 
 ## 6. Auto-Generation Engine
 
-For each archive config, after the Big Object is created, the UI generator produces:
+For an `Archive_Config__c`, `BIGOTOOL_MetadataGenerator.generate()` creates, in order:
 
-| Artifact | Metadata Type | Content |
-|---|---|---|
-| **Custom Tab** | `CustomTab` | Tab for `Archive_<Obj>__b` with icon/color |
-| **List View(s)** | `ListView` | Default "Recently Archived" sorted by `ArchivedDate__c DESC`, columns = `List_View_Fields__c` |
-| **Record Page** | `FlexiPage` | Lightning record page hosting the `bigotoolArchiveDetail` LWC (renders JSON payload + restore button) |
-| **App assignment** | `CustomApplication` | Adds tab to the **Big Object Tooling** app |
-| **Permission Set** | `PermissionSet` | Updates the shared `BIGOTOOL_Archive_Viewer` (and `BIGOTOOL_Administrator`) sets to grant read on the new BO + tab visibility — no per-object permission sets |
-
-> Because Big Objects have **no native UI**, "record pages" are FlexiPages whose content is **LWC-driven** (Big Objects aren't directly supported by standard record-detail components). The generator wires the LWC with the BO API name as a design attribute.
+| Step | Metadata Type               | Content                                                                                                                                                                                      |
+| ---- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `CustomObject` (Big Object) | `Archive_*__b` with `OriginalId__c`, `ArchivedDate__c`, the three JSON columns, a Text(255) column per list-view field, and the `Archive Index` (`OriginalId__c ASC, ArchivedDate__c DESC`). |
+| 2    | `FlexiPage` (App Page)      | Hosts the generic `bigotoolArchiveListView` LWC bound to the new Big Object.                                                                                                                 |
+| 3    | `CustomTab`                 | A Lightning-page tab (`Archive <Object>`) exposing the FlexiPage — Big Objects cannot back object tabs directly.                                                                             |
+| 4    | `PermissionSet`             | A dedicated per-object set granting read on the Big Object (object + FLS on the data/list-view columns) and tab visibility.                                                                  |
+| 5    | Scheduled job               | Schedules `BIGOTOOL_ArchiveSchedulable` from the config's CRON.                                                                                                                              |
 
 ```mermaid
 flowchart LR
-    CFG["Archive_Config__c"] --> GEN["BIGOTOOL_UIGenerator"]
-    GEN --> T["CustomTab"]
-    GEN --> LV["ListView"]
-    GEN --> FP["FlexiPage + LWC"]
-    GEN --> APP["CustomApplication update"]
-    GEN --> PS["PermissionSet"]
+    CFG["Archive_Config__c (Pending)"] --> MG["BIGOTOOL_MetadataGenerator"]
+    MG --> BO["Big Object + index"]
+    MG --> FP["FlexiPage + bigotoolArchiveListView"]
+    MG --> TAB["CustomTab"]
+    MG --> PS["PermissionSet (per object)"]
+    MG --> JOB["Schedule BIGOTOOL_ArchiveSchedulable"]
 ```
+
+> Each step is wrapped defensively: a failure in the tab, permission set or schedule step is recorded as a warning rather than aborting the whole generation. Metadata API callouts must complete **before** any DML in the same transaction.
 
 ---
 
-## 7. UI/UX Design
+## 7. User Interface (LWC)
 
-All UI is **Lightning Web Components** inside the unified app, using **SLDS** for native look-and-feel. Wizards use the **`lightning-progress-indicator`** path pattern.
+All UI is **Lightning Web Components** using SLDS. Wizards use the `lightning-progress-indicator` path pattern.
 
-### 7.1 Archival Configuration Wizard (`bigotoolArchiveWizard`)
+| Component                         | Purpose                                                                                                                               | Apex backing                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| **`bigotoolArchiveWizard`**       | 6-step archive setup: Object → Criteria → Fields → Schedule → Restore → Review.                                                       | `BIGOTOOL_ArchiveWizardController`  |
+| **`bigotoolFieldLogWizard`**      | 5-step field-history setup: Object → Fields → Events & Mode → Retention → Review.                                                     | `BIGOTOOL_FieldLogWizardController` |
+| **`bigotoolArchiveGenerator`**    | Modal that triggers Big Object/page/tab/permission-set generation for a config.                                                       | `BIGOTOOL_GenerationController`     |
+| **`bigotoolArchiveScheduler`**    | Archive_Config record-page component: schedule state, last run, cumulative count; start / pause / delete schedule, run now.           | `BIGOTOOL_SchedulerController`      |
+| **`bigotoolArchiveListView`**     | Generic, paginated list view over any generated Big Object; date-range & original-Id filters; CSV export.                             | `BIGOTOOL_ArchiveViewController`    |
+| **`bigotoolArchiveRecordView`**   | Dynamic detail layout for one archived row (renders the JSON snapshot); Restore action.                                               | `BIGOTOOL_ArchiveViewController`    |
+| **`bigotoolHistoryTimeline`**     | Field-history viewer for any record (timeline or table mode); field/type/user filters, cursor pagination.                             | `BIGOTOOL_HistoryController`        |
+| **`bigotoolDashboard`**           | App home: config coverage, job-run history, and org-level toggles (`Master_Switch__c`, `Archiving_Enabled__c`, `Logging_Enabled__c`). | `BIGOTOOL_DashboardController`      |
+| **`bigotoolGenerateTriggerCode`** | Displays the generated field-history trigger source for the admin to deploy.                                                          | uiapi GraphQL + `updateRecord`      |
+| **`bigotoolSearchablePicklist`**  | Reusable searchable picklist used by the wizards.                                                                                     | none                                |
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Big Object Tooling ▸ New Archive Configuration                        │
-│  ①Object ─ ②Criteria ─ ③Fields ─ ④Schedule ─ ⑤Restore ─ ⑥Review      │
-├──────────────────────────────────────────────────────────────────────┤
-│ STEP 1 · Choose Object                                                 │
-│   ◉ Case          Records: 4.2M   Native storage: 1.1 GB              │
-│   ○ Opportunity   Pick from searchable list of std/custom objects     │
-│   [Search objects… 🔍]                                                 │
-│                                                          [Next ▸]      │
-└──────────────────────────────────────────────────────────────────────┘
-```
+### 7.1 CSV Export
 
-**Step-by-step flow:**
+Export is provided by `BIGOTOOL_ArchiveViewController.exportCsv(configId, originalIdFilter, fromDate, toDate)` and surfaced as an action on `bigotoolArchiveListView`:
 
-1. **Choose Object** — searchable list of archivable objects with live record-count & storage estimate (`Limits`/`RecordCount`).
-2. **Define Criteria** — visual builder: *Age* (field + "older than N days") and/or *Filter* (field-operator-value rows → compiled to SOQL `WHERE`, validated server-side). Live "**Matching records: ~38,402**" preview via `COUNT()` async query.
-3. **Select Fields** — dual-list picker: which fields become **flattened BO columns** (for list views) vs. all fields auto-captured in JSON payload. Warns on field-count/index limits.
-4. **Schedule** — frequency picker (One-time / Daily / Weekly / CRON), batch size slider, concurrency note.
-5. **Restore Policy** — choose conflict behavior, owner reparenting, automation bypass.
-6. **Review & Generate** — summary card + **"What will be created"** manifest (BO, trigger, batch, tab, list view, record page, perm set). On **Generate**, shows a real-time progress tracker of the Metadata API deploy with per-artifact status.
-
-### 7.2 Field History Wizard (`bigotoolFieldLogWizard`)
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  ①Object ─ ②Fields ─ ③Events & Mode ─ ④Retention ─ ⑤Review           │
-├──────────────────────────────────────────────────────────────────────┤
-│ STEP 2 · Select Fields to Track                                        │
-│   Available (38)            ▸  Tracked (5)                             │
-│   ┌────────────────┐           ┌────────────────────────────┐         │
-│   │ AccountSource  │  [ ▸ ]    │ Stage  🔒mask  ☑old/new    │         │
-│   │ Industry       │  [ ◂ ]    │ Amount        ☑old/new     │         │
-│   │ Rating         │           │ OwnerId       ☑old/new     │         │
-│   └────────────────┘           └────────────────────────────┘         │
-│   ⚠ Native field history limited to 20 fields — BIGOTOOL has no limit.     │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-1. **Object** → 2. **Fields** (dual-list, per-field *mask PII* + *old/new* flags) → 3. **Events & Async Mode** (create/update/delete/undelete; Platform Event / Queueable / Sync) → 4. **Retention** (TTL days, purge schedule) → 5. **Review & Generate** (creates trigger + activates config record).
-
-### 7.3 Feature Toggle Console (`bigotoolToggleConsole`)
-
-A grid of every configured object with **inline switches**: Logging ▢/▣, Archiving ▢/▣, plus the global **Master Switch**. Writes to Hierarchy CS — instant, no deploy. Shows last-run status and next-scheduled time. Archive visibility is controlled by assigning the generated `BIGOTOOL_Archive_<Object>` permission sets (see §10.2).
-
-### 7.4 Field History Timeline (`bigotoolHistoryTimeline`) — record page component
-
-Dropped onto **any** source record page (Lightning App Builder). Queries `FieldChangeLog__b` by the record's Id, renders a **vertical timeline**:
-
-```
-● 2026-06-20 14:02  Jane Doe
-│   Stage:  Prospecting → Qualification
-│   Amount: $10,000 → $25,000
-●  2026-06-18 09:11  System
-│   Owner:  A. Smith → B. Lee
-```
-
-Features: field/date filters, user filter, infinite scroll (index-paged via `ChangedDateTime__c` cursor), "masked" badge for PII fields, and an **Export** action (see §7.7) — visible **only** to users with the export permission set — that exports the **full** field-change history for the record to CSV (not just the loaded page).
-
-### 7.5 Archive Browser (`bigotoolArchiveBrowser`) — tab component
-
-Generated per archived object. SLDS datatable backed by BO columns, with:
-- Filter bar (indexed fields only — UI **disables** non-indexed filters to prevent non-selective queries).
-- Row action **View** (opens `bigotoolArchiveDetail` → renders JSON payload as a read-only record layout).
-- Row/bulk action **Restore** (confirmation modal → `BIGOTOOL_RestoreQueueable`, toast on completion).
-- "Restore to clone" option to avoid overwriting live data.
-- **Export** action (see §7.7) — visible **only** to users with the export permission set — to export either the **current filtered result** or the **entire object archive** (millions of rows) to CSV.
-
-### 7.6 Monitoring Dashboard (`bigotoolDashboard`)
-
-Home page of the app: job run history (`Archive_Job_Log__b`), records archived over time, storage reclaimed, failed-job alerts, and a "Big Object usage" gauge.
-
-### 7.7 Data Export to CSV (`bigotoolExportButton` + `BIGOTOOL_ExportService`)
-
-A **reusable, permission-gated** export capability surfaced as an **Export** action on every viewer component (`bigotoolHistoryTimeline`, `bigotoolArchiveBrowser`, and `bigotoolArchiveDetail`). It supports two scopes and is engineered for **bulk export of millions of records**.
-
-#### 7.7.1 Export scopes
-
-| Scope | Triggered from | What is exported | Typical volume |
-|---|---|---|---|
-| **Record history** | `bigotoolHistoryTimeline` on a record page | The **complete** `FieldChangeLog__b` history for one record (all fields, all dates — not just the loaded page). | 10s–10,000s rows |
-| **Filtered archive** | `bigotoolArchiveBrowser` with active filters | All `Archive_<Obj>__b` rows matching the current **index-aligned** filter. | 1,000s–millions |
-| **Full object archive** | `bigotoolArchiveBrowser` "Export all" | The **entire** Big Object archive for that object. | millions |
-
-#### 7.7.2 Permission gating
-
-- The Export action button is **rendered only** when the running user has the **`BIGOTOOL_Can_Export`** custom permission (checked client-side via `@salesforce/customPermission/BIGOTOOL_Can_Export` and re-verified **server-side** in `BIGOTOOL_ExportService` before any query runs).
-- The custom permission is granted exclusively through the **`BIGOTOOL_Data_Exporter`** permission set (assignable independently of viewer/restore access). Users without it never see the button and are rejected at the Apex entry point (defense in depth).
-- Every export request is written to `Archive_Job_Log__b` (`JobType__c = 'Export'`) with the requesting user, scope, row count, and resulting file Id for full audit.
-
-#### 7.7.3 Architecture — async, bulk-safe CSV generation
-
-Because exports can reach **millions of rows**, the export **never** runs synchronously in the LWC. The flow is fully asynchronous and chunked:
-
-```mermaid
-flowchart LR
-    BTN["bigotoolExportButton (LWC)\n⛔ hidden w/o BIGOTOOL_Can_Export"] --> SVC["BIGOTOOL_ExportService\n(@AuraEnabled, re-checks perm)"]
-    SVC --> JOB["BIGOTOOL_ExportBatch\n(Batchable, Stateful)"]
-    JOB -->|index-aligned SOQL / Async SOQL| BO[("FieldChangeLog__b /\nArchive_&lt;Obj&gt;__b")]
-    JOB -->|append CSV chunks| FILE["ContentVersion (CSV)\nstitched in finish()"]
-    JOB --> LOG["Archive_Job_Log__b\n(JobType = Export)"]
-    FILE --> NOTIF["Notify user\n(Custom Notification + bell)\nsecure download link"]
-```
-
-1. **Request** — `bigotoolExportButton` calls `BIGOTOOL_ExportService.requestExport(scope, objectApiName, recordId, filterJson, columns)`.
-2. **Authorize** — service re-checks `BIGOTOOL_Can_Export`; rejects with an `AuraHandledException` if absent.
-3. **Dispatch** — for small record-history exports (below a configurable threshold, e.g., ≤ 5,000 rows) the service may return CSV inline for an instant browser download; for anything larger it enqueues **`BIGOTOOL_ExportBatch`**.
-4. **Generate** — `BIGOTOOL_ExportBatch` (`Database.Batchable`, `Database.Stateful`) queries the Big Object **left-to-right on the index**, formats each scope chunk as CSV (RFC 4180 quoting, configurable delimiter, header row), and appends to a growing file. For very large/full-object exports it uses **Bulk API 2.0 query jobs** (which return CSV natively) or **Async SOQL** writing to a target Big Object/Files, avoiding synchronous governor limits.
-5. **Persist** — the final CSV is stored as a **`ContentVersion` (Salesforce File)** owned by the requester. Files > the single-file practical limit are **split into part files** (`export_part_001.csv`, …) and/or zipped.
-6. **Notify** — on `finish()`, a **Custom Notification** (bell + optional email) is sent with a secure, time-limited download link; the job is logged.
-
-#### 7.7.4 CSV format & options
-
-- **Header row** of human-readable column labels; **field-history** exports use columns `RecordId, Field, OldValue, NewValue, ChangedBy, ChangedDateTime, ChangeType, TransactionId`.
-- **Archive** exports use the flattened BO columns plus an optional `Payload` (full JSON) column.
-- RFC 4180 compliant (quote fields containing delimiters/newlines, escape embedded quotes), UTF-8 with BOM for Excel compatibility, configurable delimiter (comma/semicolon/tab).
-- **PII masking is preserved**: masked fields export the masked/hashed value, never the raw value, regardless of export permission.
-
-#### 7.7.5 UX flow
-
-```
-┌────────────────────────────────────────────────────────────┐
-│  Archive: Case ▸ 2,418,772 records                 [⤓ Export ▾]│  ← shown only if BIGOTOOL_Can_Export
-├────────────────────────────────────────────────────────────┤
-│  Export scope:  ◉ Current filter (38,402)  ○ Entire archive  │
-│  Columns:       ☑ Default list-view fields  ☐ Include Payload │
-│  Delimiter:     [ , ▾ ]   Encoding: UTF-8 (Excel)            │
-│                                   [Cancel]  [Start Export ▸] │
-└────────────────────────────────────────────────────────────┘
-        ↓ (async)
-  🔔 "Your export of 2,418,772 Case archive rows is ready (3 files)."  [Download]
-```
-
-For large jobs the modal closes immediately with a toast ("Export started — you'll be notified when it's ready"); the user is freed to keep working and receives a bell notification with the download link on completion.
+- The button renders only when the user holds **`BIGOTOOL_Can_Export`** (`canExport()`), re-verified server-side before any query runs.
+- The query is **index-aligned** and **synchronous**, capped at **`MAX_EXPORT_ROWS = 50,000`** rows.
+- The CSV is returned as a string for an immediate browser download. (There is no asynchronous/Bulk-API or Files-based export pipeline.)
 
 ---
 
-## 8. App Framework — Unified Lightning App
+## 8. Lightning App
 
-**App:** *Big Object Tooling* (`CustomApplication`, Lightning app, console or standard navigation).
+**App:** _Big Object Tooling_ (`Big_Object_Tooling`, Lightning app, standard navigation). Default tabs:
 
-```mermaid
-flowchart TB
-    APP["📦 Big Object Tooling (Lightning App)"]
-    APP --> H["🏠 Dashboard (bigotoolDashboard)"]
-    APP --> C["⚙️ Configuration"]
-    APP --> A["🗄️ Archived Data"]
-    APP --> L["📜 Logs & Jobs"]
+- **Dashboard** (`BIGOTOOL_Dashboard` tab → `bigotoolDashboard`) — KPIs, job history, org toggles.
+- **Archive Configurations** (`Archive_Config__c` tab) — create/manage archive configs and launch generation.
+- **Field Log Configurations** (`Field_Log_Config__c` tab) — create/manage field-history configs.
 
-    C --> C1["Archive Wizard"]
-    C --> C2["Field History Wizard"]
-    C --> C3["Toggle Console"]
-
-    A --> A1["Archive_Case (generated tab)"]
-    A --> A2["Archive_Opportunity (generated tab)"]
-    A --> A3["… one tab per config"]
-
-    L --> L1["Job Log viewer"]
-    L --> L2["Field Change Log search"]
-```
-
-**Navigation items:**
-- **Dashboard** — KPIs & alerts.
-- **Configuration** — launches the three wizards/console (Lightning page tabs hosting LWCs).
-- **Archived Data** — section that **grows automatically**; each generated tab appears here via the app-assignment step of the generator.
-- **Logs & Jobs** — operational audit.
-
-**Packaging:** Ships as a 2nd-generation managed package (`bigotool` namespace) so all components are namespaced, upgradeable, and isolated. Post-install script seeds default `BIGOTOOL_Settings__c` org defaults (Master Switch = on, toggles = off until configured).
+Each generated archive Big Object gets its **own tab** (created by the generation engine). Add those tabs to the app's navigation as needed.
 
 ---
 
 ## 9. Data Flow Sequences
 
-### 9.1 Field change → Big Object
+### 9.1 Field change → Big Object (platform-event mode)
 
 ```mermaid
 sequenceDiagram
@@ -599,34 +435,38 @@ sequenceDiagram
     participant Src as Source Record
     participant Trg as Generated Trigger
     participant CC as BIGOTOOL_ChangeCapture
-    participant PE as FieldChange__e (Platform Event)
-    participant Sub as BIGOTOOL_LogSubscriber
+    participant PE as FieldChange__e
+    participant Sub as BIGOTOOL_FieldChangeSubscriber
+    participant LW as BIGOTOOL_LogWriter
     participant BO as FieldChangeLog__b
 
-    User->>Src: Update fields (DML)
-    Src->>Trg: after update
+    User->>Src: DML (insert/update/delete/undelete)
+    Src->>Trg: after <event>
     Trg->>CC: run(obj, op, oldMap, newMap)
-    CC->>CC: check toggles + diff selected fields
-    CC->>PE: publish change events
+    CC->>CC: toggles + diff tracked fields
+    CC->>PE: publish FieldChange__e
     Note over PE: transaction commits independently
     PE-->>Sub: deliver (bulk)
-    Sub->>BO: Database.insertImmediate(logs)
+    Sub->>LW: write(rows)
+    LW->>BO: Database.insertImmediate
 ```
 
 ### 9.2 Scheduled archive with safe delete
 
 ```mermaid
 sequenceDiagram
-    participant Sch as BIGOTOOL_ArchiveScheduler
+    participant Sch as BIGOTOOL_ArchiveSchedulable
+    participant Guard as BIGOTOOL_ArchiveGuard
     participant Batch as BIGOTOOL_ArchiveBatch
     participant Src as Source Object
-    participant BO as Archive_Case__b
+    participant BO as Archive_*__b
     participant Log as Archive_Job_Log__b
 
+    Sch->>Guard: pre-flight (toggles + concurrency)
     Sch->>Batch: execute(config)
     Batch->>Src: QueryLocator (age + filter)
-    loop each scope (200)
-        Batch->>BO: insertImmediate(JSON + columns)
+    loop each scope
+        Batch->>BO: insertImmediate(JSON columns + list-view columns)
         Batch->>BO: read-back verify
         alt Delete_After_Archive
             Batch->>Src: delete verified rows only
@@ -635,182 +475,117 @@ sequenceDiagram
     Batch->>Log: write run summary
 ```
 
-### 9.3 On-demand restore
+### 9.3 On-demand restore (single record)
 
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant UI as bigotoolArchiveBrowser
-    participant Q as BIGOTOOL_RestoreQueueable
-    participant BO as Archive_Case__b
-    participant Src as Case
+    participant UI as bigotoolArchiveRecordView
+    participant AVC as BIGOTOOL_ArchiveViewController
+    participant BO as Archive_*__b
+    participant Tgt as Target Object
 
-    Admin->>UI: Select rows ▸ Restore
-    UI->>Q: enqueue(originalIds, profile)
-    Q->>BO: SELECT by index (SourceObject + OriginalId)
-    Q->>Q: deserialize Payload__c, apply conflict rules, set bypass flag
-    Q->>Src: upsert on OriginalId__c (external Id)
-    Q-->>UI: Platform Event → toast "Restored N records"
+    Admin->>UI: View row ▸ Restore
+    UI->>AVC: restoreRecord(configId, originalId, archivedDate)
+    AVC->>AVC: check BIGOTOOL_Can_Restore
+    AVC->>BO: SELECT by index (OriginalId + ArchivedDate)
+    AVC->>AVC: deserialize JSON, coerce types, apply Restore_Profile__c
+    AVC->>Tgt: upsert
+    AVC-->>UI: RestoreResult
 ```
 
-### 9.4 Bulk CSV export (millions of rows)
+### 9.4 CSV export (synchronous)
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant UI as bigotoolExportButton
-    participant Svc as BIGOTOOL_ExportService
-    participant Batch as BIGOTOOL_ExportBatch
-    participant BO as Big Object
-    participant File as ContentVersion (CSV)
-    participant Note as Custom Notification
+    participant UI as bigotoolArchiveListView
+    participant AVC as BIGOTOOL_ArchiveViewController
+    participant BO as Archive_*__b
 
-    User->>UI: Click Export (button only if BIGOTOOL_Can_Export)
-    UI->>Svc: requestExport(scope, obj, recordId, filter, columns)
-    Svc->>Svc: re-verify BIGOTOOL_Can_Export (reject if missing)
-    alt small (≤ threshold)
-        Svc-->>UI: inline CSV → instant download
-    else large / full archive
-        Svc->>Batch: enqueue (chunked)
-        loop each chunk (index-aligned)
-            Batch->>BO: SELECT left-to-right on index
-            Batch->>File: append CSV rows (RFC 4180)
-        end
-        Batch->>File: finalize / split into part files
-        Batch->>Note: notify user + secure download link
-        Note-->>User: 🔔 "Export ready (N files)"
-    end
+    User->>UI: Export (button only if BIGOTOOL_Can_Export)
+    UI->>AVC: exportCsv(configId, originalIdFilter, fromDate, toDate)
+    AVC->>AVC: re-verify BIGOTOOL_Can_Export
+    AVC->>BO: index-aligned SELECT (LIMIT 50,000)
+    AVC-->>UI: CSV string → browser download
 ```
 
 ---
 
 ## 10. Security Model
 
-| Concern | Approach |
-|---|---|
-| **CRUD/FLS** | Generated viewers run `with sharing`; enforce FLS via `Security.stripInaccessible` on payload rehydration. |
-| **Access model** | Four primary permission sets (see §10.1): `BIGOTOOL_Administrator` (full access), `BIGOTOOL_History_Viewer`, `BIGOTOOL_Archive_Viewer`, `BIGOTOOL_Configurator`. **All** of them grant the **Big Object Tooling app** + **Dashboard** visibility. |
-| **PII** | `Mask_Value__c` stores a SHA-256 hash instead of raw old/new values; viewer shows a 🔒 masked badge. |
-| **Restore authority** | Restore action gated behind a custom permission `BIGOTOOL_Can_Restore`; conflict policy prevents silent overwrite. |
-| **Export authority** | Export action gated behind custom permission `BIGOTOOL_Can_Export` (granted only via the `BIGOTOOL_Data_Exporter` permission set). Checked client-side (button visibility) **and** re-verified server-side in `BIGOTOOL_ExportService` before any query. Every export is audited in `Archive_Job_Log__b` (user, scope, row count, file Id). Masked PII stays masked in exports. |
-| **Audit** | Every archive/restore/purge writes to `Archive_Job_Log__b` with running user + async job Id. |
-| **Toggles** | Master kill-switch (CS) lets admins halt all automation instantly during incidents. |
+| Concern                 | Approach                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Big Object access**   | `FieldChangeLog__b` / `Archive_Job_Log__b` read is granted by the shipped permission sets; each generated archive Big Object is read-granted by its own generated permission set. |
+| **Sharing**             | History/archive read controllers run `without sharing` because Big Objects don't enforce record-level sharing; visibility is controlled by permission-set assignment.             |
+| **Restore authority**   | Gated by the `BIGOTOOL_Can_Restore` custom permission (UI button + server re-check).                                                                                              |
+| **Export authority**    | Gated by the `BIGOTOOL_Can_Export` custom permission (UI button + server re-check); granted via `BIGOTOOL_Data_Exporter`.                                                         |
+| **Configure authority** | Gated by the `BIGOTOOL_Can_Configure` custom permission, held by configurator/admin sets.                                                                                         |
+| **PII**                 | Fields flagged `Mask_Value__c` are stored as a SHA-256 hash; raw values are never written.                                                                                        |
+| **Toggles**             | `Master_Switch__c` (hierarchy CS) instantly halts all automation.                                                                                                                 |
 
-### 10.1 Permission Set Model
+### 10.1 Permission Sets
 
-The package ships **four primary permission sets** plus an optional **export add-on**. Each is purpose-built and **least-privilege**. A baseline grant — **visibility of the Big Object Tooling Lightning app and its Dashboard** (`bigotoolDashboard`) — is included in **every** permission set so any assigned user can open the app and see the home dashboard.
-
-| Permission Set | Intended user | App + Dashboard | Capabilities granted |
-|---|---|---|---|
-| **`BIGOTOOL_Administrator`** | System admins / package owners | ✅ | **Full access to everything**: configure via wizards, run generation, view field history, view archives, restore, **export**, manage feature toggles (`BIGOTOOL_Settings__c`), view logs. Holds all custom permissions (`BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`). |
-| **`BIGOTOOL_History_Viewer`** | Support / audit readers | ✅ | **Read** field change history: read on `FieldChangeLog__b`, access to `bigotoolHistoryTimeline`. No configure/restore/export. |
-| **`BIGOTOOL_Archive_Viewer`** | Business users browsing archived data | ✅ | **Read** archived records: read on the generated `Archive_<Obj>__b` Big Objects + their tabs granted by the per-object `BIGOTOOL_Archive_<Obj>` permission sets, access to `bigotoolArchiveBrowser`/`bigotoolArchiveDetail`. No configure/restore/export. **Which** archive objects are shown is controlled by which generated permission sets are assigned (see §10.2). |
-| **`BIGOTOOL_Configurator`** | Power admins running setup | ✅ | **Configure via wizards**: CRUD on config custom objects (`Archive_Config__c`, `Field_Log_Config__c`, `Field_Log_Field__c`, `Restore_Profile__c`), run the generation engine; holds `BIGOTOOL_Can_Configure`. Access to `bigotoolArchiveWizard`, `bigotoolFieldLogWizard`, `bigotoolToggleConsole`. |
-| **`BIGOTOOL_Data_Exporter`** *(add-on)* | Users cleared for bulk data export | ✅ | Grants **`BIGOTOOL_Can_Export`** only — surfaces the Export action on the viewers. Stackable on top of a viewer set; **already included** in `BIGOTOOL_Administrator`. |
+| Permission Set                | Intended user           | Grants                                                                                                                                                                                                                    |
+| ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`BIGOTOOL_Administrator`**  | Admins / package owners | Everything: all controllers/generation classes, full CRUD on config objects, read on the audit/history Big Objects, and the `BIGOTOOL_Can_Configure` / `BIGOTOOL_Can_Restore` / `BIGOTOOL_Can_Export` custom permissions. |
+| **`BIGOTOOL_Configurator`**   | Power admins            | Wizard + generation classes, CRUD on config objects, `BIGOTOOL_Can_Configure`; all config tabs.                                                                                                                           |
+| **`BIGOTOOL_Archive_Viewer`** | Business users          | Read access to the dashboard and `BIGOTOOL_ArchiveViewController`; read on `Archive_Job_Log__b`. **Which** archive Big Objects a user sees is governed by assigning the relevant generated per-object permission sets.    |
+| **`BIGOTOOL_History_Viewer`** | Support / audit         | Read access to the dashboard and `BIGOTOOL_HistoryController`; read on `FieldChangeLog__b`.                                                                                                                               |
+| **`BIGOTOOL_Data_Exporter`**  | Export-cleared users    | Add-on granting `BIGOTOOL_Can_Export`; stack on a viewer set.                                                                                                                                                             |
 
 **Capability matrix:**
 
-| Capability | Administrator | History_Viewer | Archive_Viewer | Configurator | Data_Exporter |
-|---|:---:|:---:|:---:|:---:|:---:|
-| View app + dashboard | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View field history records | ✅ | ✅ | — | — | — |
-| View archive records | ✅ | — | ✅ | — | — |
-| Configure via wizards | ✅ | — | — | ✅ | — |
-| Run generation (create BOs/Apex/UI) | ✅ | — | — | ✅ | — |
-| Restore archived data | ✅ | — | — | — | — |
-| Export to CSV | ✅ | — | — | — | ✅ (add-on) |
-| Manage feature toggles | ✅ | — | — | ✅ | — |
+| Capability                             | Administrator | Configurator | Archive_Viewer | History_Viewer | Data_Exporter |
+| -------------------------------------- | :-----------: | :----------: | :------------: | :------------: | :-----------: |
+| View dashboard                         |      ✅       |      ✅      |       ✅       |       ✅       |      ✅       |
+| View field history                     |      ✅       |      —       |       —        |       ✅       |       —       |
+| View archive records                   |      ✅       |      —       |       ✅       |       —        |       —       |
+| Configure via wizards / run generation |      ✅       |      ✅      |       —        |       —        |       —       |
+| Restore archived data                  |      ✅       |      —       |       —        |       —        |       —       |
+| Export to CSV                          |      ✅       |      —       |       —        |       —        |  ✅ (add-on)  |
 
-**Notes & best practices:**
-- **Stackable design:** assign a viewer set for read access, then add `BIGOTOOL_Data_Exporter` to selectively grant export — no need for separate combined sets. To let a viewer also export, assign both.
-- **Per-object Archive permission sets:** the generation engine creates a dedicated `BIGOTOOL_Archive_<Obj>` permission set (object + tab + FLS) for each new `Archive_<Obj>__b` it generates, so visibility is controlled by assigning the relevant generated set(s). `BIGOTOOL_Administrator` is additionally granted read on every archive object.
-- **Per-object Archive permission sets:** the generation engine creates a dedicated `BIGOTOOL_Archive_<Obj>` permission set per generated `Archive_<Obj>__b` (object read + field-level read + tab visibility). Assigning the relevant permission set(s) controls exactly which archive objects a user can see.
-- **Custom permissions** (`BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`) drive both LWC button visibility and server-side Apex authorization checks (defense in depth).
-- Consider bundling these into a **Permission Set Group** per persona (e.g., "Archive Analyst" = Archive_Viewer + Data_Exporter + the needed `BIGOTOOL_Archive_<Obj>` sets) for simpler assignment at scale.
+### 10.2 Generated per-object permission sets
 
-### 10.2 Archive Object Visibility via Generated Permission Sets
-
-When a config is generated, `BIGOTOOL_MetadataGenerator` creates a dedicated **`BIGOTOOL_Archive_<Obj>`** permission set that grants read on that specific `Archive_<Obj>__b` Big Object (object permission + field-level read on every generated column) and visibility of its generated tab.
-
-Visibility is therefore controlled purely by **permission set assignment** — assign a user/profile only the `BIGOTOOL_Archive_<Obj>` sets for the archives they should see. There is no custom-setting whitelist to maintain; the former `Visible_Archive_Objects__c` / `Visible_Archive_Objects_2__c` fields and the `BIGOTOOL_AccessScope` resolution layer have been removed.
-
-**Notes:**
-- `BIGOTOOL_Administrator` is granted read on every generated archive object directly, so admins always see everything.
-- Bundle the generated permission sets into a **Permission Set Group** per persona for simpler assignment at scale.
+When a config is generated, `BIGOTOOL_MetadataGenerator` creates a dedicated permission set granting read on that specific `Archive_*__b` Big Object (object permission + field-level read on the data and list-view columns) and visibility of its generated tab. Assign these sets to control exactly which archives a user can browse; bundle them into a Permission Set Group per persona for scale.
 
 ---
 
-## 11. Performance, Scale & Data Volume Best Practices
+## 11. Scale & Big Object Best Practices
 
-### 11.1 Big Object query discipline
-- **Always query left-to-right on the index.** The viewers are designed so the leading index fields (`ObjectApiName__c`/`SourceObject__c`, then record/original Id, then date) are **always** provided. Non-indexed filters are disabled in the UI.
-- Use **Async SOQL** (`/services/data/vXX/async-queries`) for large analytic reads (dashboards, exports) and **synchronous SOQL** only for single-record, index-bounded reads (timeline).
-- Paginate with a **date/sequence cursor**, never `OFFSET` (unsupported/slow at scale).
-
-### 11.2 Write discipline
-- Big Object writes via `Database.insertImmediate` are capped (**up to ~10,000 records per transaction**); chunk accordingly. Prefer **Bulk API** / batch chunks for archival.
-- Writes are **eventually consistent** — never delete source data before a **read-back verification**.
-- Big Objects support **insert/upsert only (no update/delete row-by-row)**; "updates" are re-inserts on the same index. Field-history rows include `Sequence__c` to keep same-instant changes distinct and avoid accidental overwrites.
-
-### 11.3 Asynchronous & governor safety
-- Default field logging to **Platform Events** to decouple BO writes from user transactions and bulkify.
-- Archive via **Batch Apple** with `Database.Stateful` counters; respect `Max_Batch_Concurrency__c` (CS) to avoid flex-queue saturation (max 5 active batches / 100 holding).
-- Keep generated triggers **thin**; all logic in handlers for testability and bulk safety.
-
-### 11.4 Data volume & lifecycle
-- **Retention/TTL purge** job removes expired `FieldChangeLog__b` rows (delete supported on Big Objects via index-bounded `DELETE`/`deleteImmediate` in batches).
-- **Index cardinality:** lead with high-selectivity fields (`RecordId__c`) early; avoid low-cardinality leading fields that scan large ranges.
-- **Schema drift:** the JSON `Payload__c` snapshot guarantees restore even if the source object's schema changes after archival; flattened columns are best-effort display only.
-- **Big Object limits:** plan for the org limit on number of Big Objects (use the **shared** field-log BO; only archive BOs are per-object). Monitor with the dashboard's usage gauge.
-
-### 11.5 Bulk export at scale
-- **Never export synchronously** from the LWC for unbounded scopes; route through `BIGOTOOL_ExportBatch` (chunked) or **Bulk API 2.0 query jobs** that stream CSV natively.
-- Use **Async SOQL** for full-object exports to avoid synchronous Big Object query limits; keep all export queries **index-aligned** (left-to-right) just like the viewers.
-- **Chunk & split:** write CSV in chunks; when a single file would exceed practical Salesforce File limits, split into numbered part files (and/or zip). Stream rows — never hold millions of records in heap.
-- **Throttle & audit:** respect a max-concurrent-export setting, gate behind `BIGOTOOL_Can_Export`, and log every run to `Archive_Job_Log__b` for compliance.
-- **Notify, don't block:** return immediately with a toast; deliver the finished file via Custom Notification + secure download link so users aren't tied to an open browser tab.
-
-### 11.6 Generation/deploy considerations
-- Metadata API deploys are **async**; the wizard polls `DeployResult` and shows per-component status, with rollback on failure.
-- Make generation **idempotent** (upsert metadata by developer name) so re-running a wizard reconciles rather than duplicates.
-- Big Object index is **immutable after creation** — the wizard **locks index fields** on first generation and warns that index changes require a new Big Object + migration.
+- **Query left-to-right on the index.** Viewers always supply the leading index fields; non-indexed filtering is avoided.
+- **Writes are immutable & eventually consistent.** Re-insert on the same index overwrites; the archive batch only deletes source rows after a verified read-back; `Sequence__c` keeps same-instant history rows distinct.
+- **Chunk writes.** `insertImmediate` is bounded (~10,000 rows/transaction); archival runs in Batch Apex and respects `Max_Batch_Concurrency__c`.
+- **Decouple logging.** Prefer `PlatformEvent` mode to keep Big Object writes out of the user's transaction.
+- **Export limits.** CSV export is synchronous and capped at 50,000 rows — for larger extracts, narrow by original Id / date range or use Async SOQL / Bulk API outside the package.
+- **Generation is callout-first.** Metadata API callouts must precede DML; index fields are fixed at creation, so changing the index requires a new Big Object.
 
 ---
 
-## 12. Implementation Roadmap
+## 12. Metadata Inventory
 
-| Phase | Deliverables |
-|---|---|
-| **0 · Foundation** | `bigotool` namespace, `BIGOTOOL_Settings__c`, config custom objects, `FieldChangeLog__b`, `Archive_Job_Log__b`, permission sets, base Lightning app + dashboard shell. |
-| **1 · Field History** | `BIGOTOOL_ChangeCapture`/`BIGOTOOL_Differ`, `FieldChange__e` + subscriber, `bigotoolFieldLogWizard`, `bigotoolHistoryTimeline`, trigger generator. |
-| **2 · Archival** | `BIGOTOOL_ArchiveBatch`/`Scheduler`/`Mapper`/`Verify`, `bigotoolArchiveWizard`, per-object BO generator, `bigotoolArchiveBrowser`/`bigotoolArchiveDetail`. |
-| **3 · Restore** | `BIGOTOOL_RestoreQueueable`, `Restore_Profile__c`, restore UI + conflict handling. |
-| **4 · Auto-UI** | `BIGOTOOL_UIGenerator` (tabs, list views, FlexiPages, app assignment, perm sets). |
-| **5 · Export** | `BIGOTOOL_ExportService`/`BIGOTOOL_ExportBatch`, `bigotoolExportButton`, `BIGOTOOL_Data_Exporter` perm set + `BIGOTOOL_Can_Export`, CSV formatting, file split & notifications. |
-| **6 · Hardening** | Async SOQL exports, retention/purge jobs, monitoring, PII masking, packaging & install scripts. |
+**Big Objects:** `FieldChangeLog__b`, `Archive_Job_Log__b`, `Archive_*__b` (generated, one per config).
 
----
+**Custom Objects:** `Archive_Config__c`, `Archive_Field__c` (MD child), `Restore_Profile__c` (MD child), `Field_Log_Config__c`, `Field_Log_Field__c` (MD child).
 
-## 13. Appendix — Metadata Inventory
+**Custom Setting:** `BIGOTOOL_Settings__c` (Hierarchy).
 
-**Big Objects:** `FieldChangeLog__b`, `Archive_Job_Log__b`, `Archive_<Object>__b` (generated, 1 per config).
+**Platform Event:** `FieldChange__e`.
 
-**Custom Objects (configuration):** `Archive_Config__c`, `Field_Log_Config__c`, `Field_Log_Field__c` (master-detail child of `Field_Log_Config__c`), `Restore_Profile__c`.
+**Apex — runtime:** `BIGOTOOL_Toggles`, `BIGOTOOL_ConfigRepo`, `BIGOTOOL_ChangeCapture`, `BIGOTOOL_Differ`, `BIGOTOOL_EventPublisher`, `BIGOTOOL_LogWriter`, `BIGOTOOL_LogFlushQueueable`, `BIGOTOOL_ArchiveBatch`, `BIGOTOOL_ArchiveSchedulable`, `BIGOTOOL_ArchiveGuard`.
 
-**Custom Settings:** `BIGOTOOL_Settings__c` (Hierarchy).
+**Apex — controllers / read APIs:** `BIGOTOOL_ArchiveWizardController`, `BIGOTOOL_FieldLogWizardController`, `BIGOTOOL_GenerationController`, `BIGOTOOL_SchedulerController`, `BIGOTOOL_ArchiveViewController` (view + export + restore), `BIGOTOOL_HistoryController`, `BIGOTOOL_DashboardController`.
 
-**Platform Events:** `FieldChange__e`.
+**Apex — generation:** `BIGOTOOL_MetadataGenerator`, `MetadataService` (Salesforce Labs apex-mdapi SOAP client), `BIGOTOOL_MetadataServiceMock` (test).
 
-**Apex (core):** `BIGOTOOL_ConfigRepo`, `BIGOTOOL_Toggles`, `BIGOTOOL_AccessScope`, `BIGOTOOL_ArchiveController`, `BIGOTOOL_Differ`, `BIGOTOOL_ChangeCapture`, `BIGOTOOL_EventPublisher`, `BIGOTOOL_LogSubscriber`, `BIGOTOOL_LogFlushQueueable`, `BIGOTOOL_QueryBuilder`, `BIGOTOOL_Mapper`, `BIGOTOOL_Verify`, `BIGOTOOL_ArchiveBatch`, `BIGOTOOL_ArchiveScheduler`, `BIGOTOOL_RestoreQueueable`, `BIGOTOOL_ExportService`, `BIGOTOOL_ExportBatch`, `BIGOTOOL_JobLogger`, `BIGOTOOL_MetadataService`, `BIGOTOOL_TemplateEngine`, `BIGOTOOL_DeployService`, `BIGOTOOL_UIGenerator`.
+**Triggers:** `BIGOTOOL_FieldChangeSubscriber` (on `FieldChange__e`); plus admin-deployed per-object field-history triggers generated by `bigotoolGenerateTriggerCode`.
 
-**Apex (generated):** `<Object>FieldLogTrigger` per logged object.
+**LWC:** `bigotoolArchiveWizard`, `bigotoolFieldLogWizard`, `bigotoolArchiveGenerator`, `bigotoolArchiveScheduler`, `bigotoolArchiveListView`, `bigotoolArchiveRecordView`, `bigotoolHistoryTimeline`, `bigotoolDashboard`, `bigotoolGenerateTriggerCode`, `bigotoolSearchablePicklist`.
 
-**LWC:** `bigotoolArchiveWizard`, `bigotoolFieldLogWizard`, `bigotoolToggleConsole`, `bigotoolHistoryTimeline`, `bigotoolArchiveBrowser`, `bigotoolArchiveDetail`, `bigotoolDashboard`, `bigotoolExportButton`.
+**Other metadata:** Lightning app `Big_Object_Tooling`; tabs `BIGOTOOL_Dashboard`, `Archive_Config__c`, `Field_Log_Config__c`; FlexiPage `BIGOTOOL_Dashboard`; Visualforce page `BIGOTOOL_SessionId`; Remote Site Setting `BIGOTOOL_Metadata_API`.
 
-**UI Metadata (generated):** `CustomTab`, `ListView`, `FlexiPage` per archived object; `CustomApplication` (Big Object Tooling) updated per generation.
-
-**Permission Sets:** `BIGOTOOL_Administrator` (full access), `BIGOTOOL_History_Viewer`, `BIGOTOOL_Archive_Viewer` (single shared set for all archived objects), `BIGOTOOL_Configurator`, `BIGOTOOL_Data_Exporter` (export add-on); all grant Big Object Tooling app + dashboard visibility. Custom permissions: `BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`.
+**Permission Sets:** `BIGOTOOL_Administrator`, `BIGOTOOL_Configurator`, `BIGOTOOL_Archive_Viewer`, `BIGOTOOL_History_Viewer`, `BIGOTOOL_Data_Exporter` (+ generated per-object archive sets). **Custom permissions:** `BIGOTOOL_Can_Configure`, `BIGOTOOL_Can_Restore`, `BIGOTOOL_Can_Export`.
 
 ---
 
-> **Document status:** Design blueprint — ready for developer/admin implementation. All component, field, and index names are recommendations; confirm against org-specific naming standards and Big Object/custom object limits before generation.
+> **Document status:** Reflects the implementation in this repository (API v67.0). Generated metadata (Big Objects, tabs, permission sets) is created at runtime via the Metadata API and is not checked into source.
