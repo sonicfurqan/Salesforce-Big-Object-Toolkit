@@ -66,9 +66,8 @@ public with sharing class BIGOTOOL_MetadataGenerator {
       : bigObjectApiName(config.Source_Object__c);
     result.bigObjectApiName = bigObjectApi;
 
-    // List-view fields are now stored as flagged Archive_Field__c child records
-    // and materialized as their own physical Big Object columns (legacy configs
-    // fall back to the CSV column list).
+    // List-view fields are stored as flagged Archive_Field__c child records and
+    // materialized as their own physical Big Object columns.
     List<String> listViewFields = listViewSourceFields(config);
 
     MetadataService.MetadataPort service = createService();
@@ -255,8 +254,7 @@ public with sharing class BIGOTOOL_MetadataGenerator {
 
   /**
    * Returns the source field API names flagged as list-view columns for the
-   * config (Archive_Field__c.Is_List_View__c = true). Falls back to the legacy
-   * CSV column list for configs created before flagged child records existed.
+   * config (Archive_Field__c.Is_List_View__c = true).
    */
   @TestVisible
   private static List<String> listViewSourceFields(Archive_Config__c config) {
@@ -272,9 +270,6 @@ public with sharing class BIGOTOOL_MetadataGenerator {
           result.add(af.Field_API_Name__c);
         }
       }
-    }
-    if (result.isEmpty() && config != null) {
-      result = splitCsv(config.List_View_Fields__c);
     }
     return result;
   }

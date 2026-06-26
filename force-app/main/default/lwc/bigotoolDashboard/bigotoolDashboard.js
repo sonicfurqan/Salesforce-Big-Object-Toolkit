@@ -33,6 +33,14 @@ const JOB_COLUMNS = [
   { label: "Error", fieldName: "errorSummary", type: "text", wrapText: true }
 ];
 
+const DEFAULT_SETTINGS = {
+  masterSwitch: true,
+  loggingEnabled: true,
+  archivingEnabled: false,
+  debugMode: false,
+  maxBatchConcurrency: null
+};
+
 export default class BigotoolDashboard extends LightningElement {
   @track data;
   jobColumns = JOB_COLUMNS;
@@ -41,7 +49,7 @@ export default class BigotoolDashboard extends LightningElement {
   wiredResult;
 
   @track showSettings = false;
-  @track settings = {};
+  @track settings = { ...DEFAULT_SETTINGS };
   savingSettings = false;
 
   @wire(getDashboard)
@@ -89,8 +97,8 @@ export default class BigotoolDashboard extends LightningElement {
 
   async handleOpenSettings() {
     try {
-      const os = await getOrgSettings();
-      this.settings = { ...os };
+      const settingsState = await getOrgSettings();
+      this.settings = this.normalizeSettingsState(settingsState);
       this.showSettings = true;
     } catch (e) {
       this.dispatchEvent(
@@ -135,7 +143,7 @@ export default class BigotoolDashboard extends LightningElement {
             ? null
             : this.settings.maxBatchConcurrency
       });
-      this.settings = { ...os };
+      this.settings = this.normalizeSettingsState(os);
       this.showSettings = false;
       this.dispatchEvent(
         new ShowToastEvent({
@@ -231,6 +239,13 @@ export default class BigotoolDashboard extends LightningElement {
   pillClass(on) {
     const base = "slds-badge ";
     return base + (on ? "slds-theme_success" : "slds-theme_warning");
+  }
+
+  normalizeSettingsState(settingsState) {
+    return {
+      ...DEFAULT_SETTINGS,
+      ...(settingsState || {})
+    };
   }
 
   reduceError(error) {

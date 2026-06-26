@@ -12,11 +12,7 @@ private class BIGOTOOL_SchedulerControllerTest {
   static void enableArchiving() {
     // Archive guard requires Master Switch + Archiving Enabled to be ON. Seed an
     // org-default settings row so scheduler entry points are permitted to run.
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = true,
-      Archiving_Enabled__c = true
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, true, false, null);
   }
 
   private static User configurator() {

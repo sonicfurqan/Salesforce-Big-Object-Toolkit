@@ -13,11 +13,7 @@ private class BIGOTOOL_ArchiveGuardTest {
 
   @IsTest
   static void blocksWhenMasterSwitchOff() {
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = false,
-      Archiving_Enabled__c = true
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(false, true, true, false, null);
     Test.startTest();
     BIGOTOOL_ArchiveGuard.Decision d = BIGOTOOL_ArchiveGuard.evaluate();
     Test.stopTest();
@@ -27,11 +23,7 @@ private class BIGOTOOL_ArchiveGuardTest {
 
   @IsTest
   static void blocksWhenArchivingDisabled() {
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = true,
-      Archiving_Enabled__c = false
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, false, false, null);
     Test.startTest();
     BIGOTOOL_ArchiveGuard.Decision d = BIGOTOOL_ArchiveGuard.evaluate();
     Test.stopTest();
@@ -41,12 +33,7 @@ private class BIGOTOOL_ArchiveGuardTest {
 
   @IsTest
   static void allowsWhenUnderConcurrencyLimit() {
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = true,
-      Archiving_Enabled__c = true,
-      Max_Batch_Concurrency__c = 3
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, true, false, 3);
     Test.startTest();
     // No batch jobs are in flight in the test context, so the run is allowed.
     BIGOTOOL_ArchiveGuard.Decision d = BIGOTOOL_ArchiveGuard.evaluate();
@@ -56,12 +43,7 @@ private class BIGOTOOL_ArchiveGuardTest {
 
   @IsTest
   static void blocksWhenAtConcurrencyLimit() {
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = true,
-      Archiving_Enabled__c = true,
-      Max_Batch_Concurrency__c = 2
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, true, false, 2);
     BIGOTOOL_ArchiveGuard.testActiveJobCount = 2;
     Test.startTest();
     BIGOTOOL_ArchiveGuard.Decision d = BIGOTOOL_ArchiveGuard.evaluate();

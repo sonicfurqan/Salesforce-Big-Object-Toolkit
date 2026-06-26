@@ -7,6 +7,12 @@ public with sharing class BIGOTOOL_Differ {
   private static final Integer LONG_TEXT_MAX = 32768;
   private static final Integer LABEL_MAX = 80;
 
+  private class TrackedField {
+    public String api;
+    public String label;
+    public Boolean mask;
+  }
+
   public static List<FieldChangeLog__b> diff(
     String objName,
     System.TriggerOperation op,
@@ -68,6 +74,11 @@ public with sharing class BIGOTOOL_Differ {
       return result;
     }
 
+    List<TrackedField> trackedFields = resolveTrackedFields(objName, oc.fields);
+    if (trackedFields.isEmpty()) {
+      return result;
+    }
+
     Datetime occurredAt = Datetime.now();
     Id userId = UserInfo.getUserId();
     String txnId = Request.getCurrent().getRequestId();
@@ -77,13 +88,9 @@ public with sharing class BIGOTOOL_Differ {
       SObject newRec = (newMap != null) ? newMap.get(recId) : null;
       SObject oldRec = (oldMap != null) ? oldMap.get(recId) : null;
 
-      for (Field_Log_Field__c f : oc.fields) {
-        String api = f.Field_Api_Name__c;
-        if (String.isBlank(api)) {
-          continue;
-        }
-        Object newVal = (newRec != null) ? safeGet(newRec, api) : null;
-        Object oldVal = (oldRec != null) ? safeGet(oldRec, api) : null;
+      for (TrackedField f : trackedFields) {
+        Object newVal = (newRec != null) ? newRec.get(f.api) : null;
+        Object oldVal = (oldRec != null) ? oldRec.get(f.api) : null;
 
         if (isUpdate && valuesEqual(oldVal, newVal)) {
           continue;
@@ -98,10 +105,10 @@ public with sharing class BIGOTOOL_Differ {
         FieldChangeLog__b row = new FieldChangeLog__b();
         row.ObjectApiName__c = objName;
         row.RecordId__c = recId;
-        row.FieldApiName__c = api;
-        row.FieldLabel__c = truncate(f.Field_Label__c, LABEL_MAX);
-        row.OldValue__c = render(oldVal, f.Mask_Value__c);
-        row.NewValue__c = render(newVal, f.Mask_Value__c);
+        row.FieldApiName__c = f.api;
+        row.FieldLabel__c = f.label;
+        row.OldValue__c = render(oldVal, f.mask);
+        row.NewValue__c = render(newVal, f.mask);
         row.ChangeType__c = changeType;
         row.ChangedDateTime__c = occurredAt;
         row.ChangedByUserId__c = userId;
@@ -113,12 +120,30 @@ public with sharing class BIGOTOOL_Differ {
     return result;
   }
 
-  private static Object safeGet(SObject rec, String field) {
-    try {
-      return rec.get(field);
-    } catch (Exception e) {
-      return null;
+  private static List<TrackedField> resolveTrackedFields(String objName, List<Field_Log_Field__c> configFields) {
+    List<TrackedField> fields = new List<TrackedField>();
+    if (configFields == null || configFields.isEmpty()) {
+      return fields;
     }
+
+    Schema.SObjectType sObjType = Schema.getGlobalDescribe().get(objName);
+    if (sObjType == null) {
+      return fields;
+    }
+
+    Map<String, Schema.SObjectField> objectFields = sObjType.getDescribe().fields.getMap();
+    for (Field_Log_Field__c f : configFields) {
+      String api = f.Field_Api_Name__c;
+      if (String.isBlank(api) || !objectFields.containsKey(api)) {
+        continue;
+      }
+      TrackedField tf = new TrackedField();
+      tf.api = api;
+      tf.label = truncate(f.Field_Label__c, LABEL_MAX);
+      tf.mask = f.Mask_Value__c;
+      fields.add(tf);
+    }
+    return fields;
   }
 
   @TestVisible

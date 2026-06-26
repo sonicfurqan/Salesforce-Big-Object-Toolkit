@@ -5,8 +5,7 @@
  * concerns so every entry point (scheduler, on-demand "Run Now", the generation
  * engine's scheduled job) behaves consistently:
  *
- *   1. Feature toggles - Master_Switch__c and Archiving_Enabled__c on the
- *      BIGOTOOL_Settings__c hierarchy custom setting.
+ *   1. Feature toggles exposed by BIGOTOOL_Toggles.
  *   2. System / concurrency limits - the platform flex-queue ceiling and the
  *      configurable Max_Batch_Concurrency__c throttle. A new batch is only
  *      launched when the number of in-flight Apex batch jobs is below the limit.
@@ -37,23 +36,16 @@ public with sharing class BIGOTOOL_ArchiveGuard {
    * (interactive controller).
    */
   public static Decision evaluate() {
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getInstance();
+    BIGOTOOL_Toggles.SettingsState settings = BIGOTOOL_Toggles.currentSettings();
 
-    Boolean masterOn = cs == null || cs.Master_Switch__c != false;
-    if (!masterOn) {
+    if (!settings.masterSwitch) {
       return new Decision(false, 'Archiving is blocked: the global Master Switch is OFF.');
     }
-    Boolean archivingOn = cs == null || cs.Archiving_Enabled__c != false;
-    if (!archivingOn) {
+    if (!settings.archivingEnabled) {
       return new Decision(false, 'Archiving is disabled in BIGOTOOL Settings (Archiving Enabled is OFF).');
     }
 
-    Integer maxConcurrency = (cs != null &&
-      cs.Max_Batch_Concurrency__c != null &&
-      cs.Max_Batch_Concurrency__c > 0)
-      ? Integer.valueOf(cs.Max_Batch_Concurrency__c)
-      : DEFAULT_MAX_CONCURRENCY;
-
+    Integer maxConcurrency = BIGOTOOL_Toggles.maxBatchConcurrency(DEFAULT_MAX_CONCURRENCY);
     Integer inFlight = activeBatchJobCount();
     if (inFlight >= FLEX_QUEUE_LIMIT) {
       return new Decision(

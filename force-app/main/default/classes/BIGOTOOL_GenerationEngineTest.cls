@@ -4,11 +4,7 @@ private class BIGOTOOL_GenerationEngineTest {
   static void setup() {
     // Archive batch now self-guards on Master Switch + Archiving Enabled, so seed
     // an org-default settings row that permits archiving to run under test.
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = true,
-      Archiving_Enabled__c = true
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, true, false, null);
     Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
     User u = new User(
       FirstName = 'Gen',
@@ -39,13 +35,42 @@ private class BIGOTOOL_GenerationEngineTest {
       Criteria_Type__c = 'Age',
       Age_Field__c = 'CreatedDate',
       Age_Threshold_Days__c = 365,
-      List_View_Fields__c = 'Name,Industry,AnnualRevenue,CreatedDate',
       Delete_After_Archive__c = false,
       Batch_Size__c = 200,
       Schedule_Cron__c = '0 0 1 * * ?',
       Generation_Status__c = 'Pending'
     );
     insert cfg;
+    insert new List<Archive_Field__c>{
+      new Archive_Field__c(
+        Archive_Config__c = cfg.Id,
+        Field_API_Name__c = 'Name',
+        Field_Label__c = 'Account Name',
+        Field_Type__c = 'STRING',
+        Is_List_View__c = true
+      ),
+      new Archive_Field__c(
+        Archive_Config__c = cfg.Id,
+        Field_API_Name__c = 'Industry',
+        Field_Label__c = 'Industry',
+        Field_Type__c = 'PICKLIST',
+        Is_List_View__c = true
+      ),
+      new Archive_Field__c(
+        Archive_Config__c = cfg.Id,
+        Field_API_Name__c = 'AnnualRevenue',
+        Field_Label__c = 'Annual Revenue',
+        Field_Type__c = 'CURRENCY',
+        Is_List_View__c = true
+      ),
+      new Archive_Field__c(
+        Archive_Config__c = cfg.Id,
+        Field_API_Name__c = 'CreatedDate',
+        Field_Label__c = 'Created Date',
+        Field_Type__c = 'DATETIME',
+        Is_List_View__c = true
+      )
+    };
     return cfg;
   }
 
@@ -144,12 +169,18 @@ private class BIGOTOOL_GenerationEngineTest {
       Is_Active__c = true,
       Criteria_Type__c = 'SOQL_Filter',
       Filter_Logic__c = 'Name != null',
-      List_View_Fields__c = 'Name,Industry,AnnualRevenue,CreatedDate',
       Delete_After_Archive__c = false,
       Batch_Size__c = 200,
       Generation_Status__c = 'Pending'
     );
     insert cfg;
+    insert new Archive_Field__c(
+      Archive_Config__c = cfg.Id,
+      Field_API_Name__c = 'Name',
+      Field_Label__c = 'Account Name',
+      Field_Type__c = 'STRING',
+      Is_List_View__c = true
+    );
     insert new Account(Name = 'Archive Me Co', Industry = 'Technology');
     Test.startTest();
     Database.executeBatch(new BIGOTOOL_ArchiveBatch(cfg.Id), 200);

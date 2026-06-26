@@ -191,11 +191,6 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
-        <field>Archive_Config__c.List_View_Fields__c</field>
-        <editable>true</editable>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
         <field>Archive_Config__c.Generation_Status__c</field>
         <editable>true</editable>
         <readable>true</readable>

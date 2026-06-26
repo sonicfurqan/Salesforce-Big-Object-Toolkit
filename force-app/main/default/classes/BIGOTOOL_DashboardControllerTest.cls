@@ -97,13 +97,7 @@ private class BIGOTOOL_DashboardControllerTest {
 
   @IsTest
   static void getDashboard_reflectsToggleState() {
-    insert new BIGOTOOL_Settings__c(
-      SetupOwnerId = UserInfo.getOrganizationId(),
-      Master_Switch__c = false,
-      Logging_Enabled__c = false,
-      Archiving_Enabled__c = true,
-      Debug_Mode__c = true
-    );
+    BIGOTOOL_Toggles.saveOrgSettings(false, false, true, true, null);
 
     Test.startTest();
     BIGOTOOL_DashboardController.DashboardData data = BIGOTOOL_DashboardController.getDashboard();
@@ -141,13 +135,10 @@ private class BIGOTOOL_DashboardControllerTest {
 
   @IsTest
   static void getOrgSettings_returnsDefaults() {
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
-    cs.SetupOwnerId = UserInfo.getOrganizationId();
-    cs.Master_Switch__c = true;
-    upsert cs;
+    BIGOTOOL_Toggles.saveOrgSettings(true, true, false, false, null);
 
     Test.startTest();
-    BIGOTOOL_DashboardController.OrgSettings os = BIGOTOOL_DashboardController.getOrgSettings();
+    BIGOTOOL_Toggles.SettingsState os = BIGOTOOL_DashboardController.getOrgSettings();
     Test.stopTest();
     System.assertNotEquals(null, os, 'Org settings should not be null.');
     System.assertEquals(true, os.masterSwitch, 'Reflects the persisted master switch.');
@@ -202,7 +193,7 @@ private class BIGOTOOL_DashboardControllerTest {
 
     System.runAs(u) {
       Test.startTest();
-      BIGOTOOL_DashboardController.OrgSettings os = BIGOTOOL_DashboardController.saveOrgSettings(
+      BIGOTOOL_Toggles.SettingsState os = BIGOTOOL_DashboardController.saveOrgSettings(
         true,
         false,
         false,

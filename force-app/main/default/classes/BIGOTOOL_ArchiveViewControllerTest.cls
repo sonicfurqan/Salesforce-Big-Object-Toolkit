@@ -5,7 +5,6 @@ private class BIGOTOOL_ArchiveViewControllerTest {
       Name = 'Account Archive',
       Source_Object__c = 'Account',
       Big_Object_Api_Name__c = 'Archive_Account__b',
-      List_View_Fields__c = 'Name,Industry,AnnualRevenue',
       Criteria_Type__c = 'Age',
       Generation_Status__c = 'Generated'
     );

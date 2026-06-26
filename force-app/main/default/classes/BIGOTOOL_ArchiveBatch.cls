@@ -138,7 +138,6 @@ public with sharing class BIGOTOOL_ArchiveBatch implements Database.Batchable<SO
         Age_Field__c,
         Age_Threshold_Days__c,
         Filter_Logic__c,
-        List_View_Fields__c,
         Delete_After_Archive__c,
         Batch_Size__c,
         Schedule_Cron__c,
@@ -171,11 +170,7 @@ public with sharing class BIGOTOOL_ArchiveBatch implements Database.Batchable<SO
         }
       }
     }
-    // Backward compatibility: fall back to the list-view CSV if no child
-    // archive fields have been configured yet.
-    if (archiveFields.isEmpty()) {
-      archiveFields = BIGOTOOL_MetadataGenerator.splitCsv(config.List_View_Fields__c);
-    }
+
     buildLongTextFieldMap();
   }
 

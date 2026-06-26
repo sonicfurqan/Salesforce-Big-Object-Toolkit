@@ -122,7 +122,6 @@ private class BIGOTOOL_ArchiveWizardControllerTest {
         Criteria_Type__c,
         Age_Field__c,
         Age_Threshold_Days__c,
-        List_View_Fields__c,
         Batch_Size__c,
         Generation_Status__c,
         Is_Active__c
@@ -134,9 +133,18 @@ private class BIGOTOOL_ArchiveWizardControllerTest {
     System.assertEquals('Age', cfg.Criteria_Type__c);
     System.assertEquals('CreatedDate', cfg.Age_Field__c);
     System.assertEquals(365, cfg.Age_Threshold_Days__c);
-    System.assertEquals('Name,Industry', cfg.List_View_Fields__c, 'List view fields stored as CSV.');
     System.assertEquals('Pending', cfg.Generation_Status__c);
     System.assertEquals(true, cfg.Is_Active__c);
+
+    List<Archive_Field__c> listFields = [
+      SELECT Field_API_Name__c, Is_List_View__c
+      FROM Archive_Field__c
+      WHERE Archive_Config__c = :configId AND Is_List_View__c = TRUE
+      ORDER BY Field_API_Name__c ASC
+    ];
+    System.assertEquals(2, listFields.size(), 'List view fields are stored as child records.');
+    System.assertEquals('Industry', listFields[0].Field_API_Name__c);
+    System.assertEquals('Name', listFields[1].Field_API_Name__c);
   }
 
   @IsTest
@@ -201,7 +209,7 @@ private class BIGOTOOL_ArchiveWizardControllerTest {
       detail = BIGOTOOL_ArchiveWizardController.getConfigForEdit(configId);
     }
     System.assertEquals('Account', detail.sourceObject);
-    System.assertEquals(2, detail.listViewFields.size(), 'CSV split back into list.');
+    System.assertEquals(2, detail.listViewFields.size(), 'List-view child fields round-trip for edit.');
     System.assertEquals('Archive_Account__b', detail.bigObjectApiName);
   }
 
@@ -296,11 +304,7 @@ private class BIGOTOOL_ArchiveWizardControllerTest {
       Age_Threshold_Days__c = 30
     );
     insert parent;
-    insert new Restore_Profile__c(
-      Match_Field__c = 'Name',
-      On_Conflict__c = 'Skip',
-      Archive_Config__c = parent.Id
-    );
+    insert new Restore_Profile__c(Match_Field__c = 'Name', On_Conflict__c = 'Skip', Archive_Config__c = parent.Id);
     List<BIGOTOOL_ArchiveWizardController.PicklistOption> opts;
     System.runAs(configuratorUser()) {
       opts = BIGOTOOL_ArchiveWizardController.getRestoreProfiles();

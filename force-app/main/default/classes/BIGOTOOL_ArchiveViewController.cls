@@ -167,12 +167,10 @@ public without sharing class BIGOTOOL_ArchiveViewController {
   }
 
   /**
-   * Resolves the list-view columns for a config. Preference order:
-   *   1. Archive_Field__c children flagged Is_List_View__c (materialized as their
-   *      own physical Big Object columns).
-   *   2. Legacy List_View_Fields__c CSV (values parsed from the JSON columns).
-   * Physical columns are only used when they actually exist on the Big Object,
-   * so configs edited but not yet regenerated still render via JSON fallback.
+   * Resolves the list-view columns for a config from Archive_Field__c children
+   * flagged Is_List_View__c. Physical columns are only used when they actually
+   * exist on the Big Object, so configs edited but not yet regenerated still
+   * render via JSON fallback.
    */
   private static List<LvColumn> listColumns(Archive_Config__c cfg, String boApi) {
     Set<String> existing = bigObjectFieldNames(boApi);
@@ -824,7 +822,6 @@ public without sharing class BIGOTOOL_ArchiveViewController {
         Id,
         Source_Object__c,
         Big_Object_Api_Name__c,
-        List_View_Fields__c,
         (
           SELECT Field_API_Name__c, Field_Label__c, Field_Type__c, Is_List_View__c
           FROM Archive_Fields__r

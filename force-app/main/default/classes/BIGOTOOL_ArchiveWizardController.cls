@@ -150,7 +150,12 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
         continue;
       }
       String associateType = d.getAssociateEntityType();
-      if (associateType == 'Share' || associateType == 'History' || associateType == 'Feed' || associateType == 'ChangeEvent') {
+      if (
+        associateType == 'Share' ||
+        associateType == 'History' ||
+        associateType == 'Feed' ||
+        associateType == 'ChangeEvent'
+      ) {
         continue;
       }
       String apiName = d.getName();
@@ -346,19 +351,12 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
         Age_Field__c,
         Age_Threshold_Days__c,
         Filter_Logic__c,
-        List_View_Fields__c,
         Delete_After_Archive__c,
         Batch_Size__c,
         Schedule_Cron__c,
         Big_Object_Api_Name__c,
         (
-          SELECT
-            Id,
-            Name,
-            Match_Field__c,
-            On_Conflict__c,
-            Reparent_Owner__c,
-            Bypass_Automation__c
+          SELECT Id, Name, Match_Field__c, On_Conflict__c, Reparent_Owner__c, Bypass_Automation__c
           FROM Restore_Profiles__r
           ORDER BY CreatedDate ASC
           LIMIT 1
@@ -397,11 +395,6 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
       if (af.Is_List_View__c == true) {
         detail.listViewFields.add(af.Field_API_Name__c);
       }
-    }
-    // Legacy fallback: configs created before list-view fields were stored as
-    // flagged child records still carry the CSV column list.
-    if (detail.listViewFields.isEmpty() && String.isNotBlank(cfg.List_View_Fields__c)) {
-      detail.listViewFields = splitCsv(cfg.List_View_Fields__c);
     }
     detail.deleteAfterArchive = cfg.Delete_After_Archive__c;
     detail.batchSize = cfg.Batch_Size__c;
@@ -461,9 +454,6 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
     cfg.Age_Field__c = useAge ? input.ageField : null;
     cfg.Age_Threshold_Days__c = useAge ? input.ageThresholdDays : null;
     cfg.Filter_Logic__c = useFilter ? input.filterLogic : null;
-    cfg.List_View_Fields__c = (input.listViewFields == null || input.listViewFields.isEmpty())
-      ? null
-      : String.join(input.listViewFields, ',');
     cfg.Delete_After_Archive__c = input.deleteAfterArchive == true;
     cfg.Batch_Size__c = input.batchSize == null ? 200 : input.batchSize;
     cfg.Schedule_Cron__c = input.scheduleCron;
@@ -480,10 +470,7 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
   }
 
   private static void syncArchiveFields(ConfigInput input, Id parentConfigId) {
-    if (
-      !Schema.SObjectType.Archive_Field__c.isCreateable() ||
-      !Schema.SObjectType.Archive_Field__c.isDeletable()
-    ) {
+    if (!Schema.SObjectType.Archive_Field__c.isCreateable() || !Schema.SObjectType.Archive_Field__c.isDeletable()) {
       throw new AuraHandledException('You do not have access to Archive Field records.');
     }
     delete [SELECT Id FROM Archive_Field__c WHERE Archive_Config__c = :parentConfigId];
@@ -516,15 +503,14 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
         orderedFields.add(apiName);
         labelByField.put(
           apiName.toLowerCase(),
-          (input.archiveFieldLabels != null && i < input.archiveFieldLabels.size())
+          (input.archiveFieldLabels != null &&
+            i < input.archiveFieldLabels.size())
             ? input.archiveFieldLabels[i]
             : apiName
         );
         typeByField.put(
           apiName.toLowerCase(),
-          (input.archiveFieldTypes != null && i < input.archiveFieldTypes.size())
-            ? input.archiveFieldTypes[i]
-            : null
+          (input.archiveFieldTypes != null && i < input.archiveFieldTypes.size()) ? input.archiveFieldTypes[i] : null
         );
       }
     }
@@ -575,8 +561,7 @@ public with sharing class BIGOTOOL_ArchiveWizardController {
       throw new AuraHandledException('Unsupported conflict mode: ' + rp.onConflict);
     }
     if (
-      !Schema.SObjectType.Restore_Profile__c.isCreateable() ||
-      !Schema.SObjectType.Restore_Profile__c.isUpdateable()
+      !Schema.SObjectType.Restore_Profile__c.isCreateable() || !Schema.SObjectType.Restore_Profile__c.isUpdateable()
     ) {
       throw new AuraHandledException('You do not have access to Restore Profile records.');
     }

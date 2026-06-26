@@ -86,10 +86,6 @@
         <editHeading>true</editHeading>
         <label>Archive View Config</label>
         <layoutColumns>
-            <layoutItems>
-                <behavior>Edit</behavior>
-                <field>List_View_Fields__c</field>
-            </layoutItems>
         </layoutColumns>
         <layoutColumns>
             <layoutItems>

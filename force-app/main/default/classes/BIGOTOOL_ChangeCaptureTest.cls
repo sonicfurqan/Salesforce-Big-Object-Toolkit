@@ -1,13 +1,7 @@
 @IsTest
 private class BIGOTOOL_ChangeCaptureTest {
   private static void enableSettings(Boolean master, Boolean logging) {
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
-    if (cs.Id == null && cs.SetupOwnerId == null) {
-      cs.SetupOwnerId = UserInfo.getOrganizationId();
-    }
-    cs.Master_Switch__c = master;
-    cs.Logging_Enabled__c = logging;
-    upsert cs;
+    BIGOTOOL_Toggles.saveOrgSettings(master, logging, false, false, null);
   }
 
   private static Field_Log_Config__c setupAccountConfig(String asyncMode, Boolean isActive) {

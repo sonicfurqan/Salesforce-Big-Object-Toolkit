@@ -11,12 +11,18 @@
 public with sharing class BIGOTOOL_GenerationController {
   /** Lightweight DTO returned to the LWC. */
   public class GenerateResponse {
-    @AuraEnabled public Boolean success;
-    @AuraEnabled public String status;
-    @AuraEnabled public String bigObjectApiName;
-    @AuraEnabled public String message;
-    @AuraEnabled public List<String> details;
-    @AuraEnabled public List<String> warnings;
+    @AuraEnabled
+    public Boolean success;
+    @AuraEnabled
+    public String status;
+    @AuraEnabled
+    public String bigObjectApiName;
+    @AuraEnabled
+    public String message;
+    @AuraEnabled
+    public List<String> details;
+    @AuraEnabled
+    public List<String> warnings;
   }
 
   /** Returns the current config status so the modal can render the right copy. */
@@ -27,8 +33,14 @@ public with sharing class BIGOTOOL_GenerationController {
       throw new AuraHandledException('A configuration record is required.');
     }
     List<Archive_Config__c> rows = [
-      SELECT Id, Name, Source_Object__c, Big_Object_Api_Name__c, Generation_Status__c,
-             Delete_After_Archive__c, Is_Active__c
+      SELECT
+        Id,
+        Name,
+        Source_Object__c,
+        Big_Object_Api_Name__c,
+        Generation_Status__c,
+        Delete_After_Archive__c,
+        Is_Active__c
       FROM Archive_Config__c
       WHERE Id = :configId
       LIMIT 1
@@ -55,15 +67,16 @@ public with sharing class BIGOTOOL_GenerationController {
     GenerateResponse response = new GenerateResponse();
     String newStatus;
     try {
-      BIGOTOOL_MetadataGenerator.GenerationResult result =
-        BIGOTOOL_MetadataGenerator.generate(config);
+      BIGOTOOL_MetadataGenerator.GenerationResult result = BIGOTOOL_MetadataGenerator.generate(config);
       response.success = result.success;
       response.bigObjectApiName = result.bigObjectApiName;
       response.details = result.messages;
       response.warnings = result.warnings;
       newStatus = 'Generated';
-      response.message = 'Generation complete. Big Object ' +
-        result.bigObjectApiName + ' and supporting metadata are ready.';
+      response.message =
+        'Generation complete. Big Object ' +
+        result.bigObjectApiName +
+        ' and supporting metadata are ready.';
     } catch (Exception e) {
       response.success = false;
       response.message = 'Generation failed: ' + e.getMessage();
@@ -81,9 +94,19 @@ public with sharing class BIGOTOOL_GenerationController {
 
   private static Archive_Config__c loadConfig(Id configId) {
     List<Archive_Config__c> rows = [
-      SELECT Id, Name, Source_Object__c, Big_Object_Api_Name__c, Criteria_Type__c,
-             Age_Field__c, Age_Threshold_Days__c, Filter_Logic__c, List_View_Fields__c,
-             Delete_After_Archive__c, Batch_Size__c, Schedule_Cron__c, Generation_Status__c
+      SELECT
+        Id,
+        Name,
+        Source_Object__c,
+        Big_Object_Api_Name__c,
+        Criteria_Type__c,
+        Age_Field__c,
+        Age_Threshold_Days__c,
+        Filter_Logic__c,
+        Delete_After_Archive__c,
+        Batch_Size__c,
+        Schedule_Cron__c,
+        Generation_Status__c
       FROM Archive_Config__c
       WHERE Id = :configId
       LIMIT 1

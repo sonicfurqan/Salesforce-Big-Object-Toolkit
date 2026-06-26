@@ -80,31 +80,6 @@ public with sharing class BIGOTOOL_DashboardController {
     public List<JobRow> recent = new List<JobRow>();
   }
 
-  public class TogglesState {
-    @AuraEnabled
-    public Boolean masterSwitch = true;
-    @AuraEnabled
-    public Boolean loggingEnabled = true;
-    @AuraEnabled
-    public Boolean archivingEnabled = true;
-    @AuraEnabled
-    public Boolean debugMode = false;
-  }
-
-  /** Editable org-default snapshot of the BIGOTOOL_Settings__c custom setting. */
-  public class OrgSettings {
-    @AuraEnabled
-    public Boolean masterSwitch = true;
-    @AuraEnabled
-    public Boolean loggingEnabled = true;
-    @AuraEnabled
-    public Boolean archivingEnabled = true;
-    @AuraEnabled
-    public Boolean debugMode = false;
-    @AuraEnabled
-    public Decimal maxBatchConcurrency;
-  }
-
   public class DashboardData {
     @AuraEnabled
     public Boolean remoteSiteConfigured = true;
@@ -113,9 +88,9 @@ public with sharing class BIGOTOOL_DashboardController {
     @AuraEnabled
     public ConfigSummary config = new ConfigSummary();
     @AuraEnabled
-    public JobSummary jobs = new JobSummary();BIGOTOOL_RemoteSiteGuard
+    public JobSummary jobs = new JobSummary();
     @AuraEnabled
-    public TogglesState toggles = new TogglesState();
+    public BIGOTOOL_Toggles.SettingsState toggles = new BIGOTOOL_Toggles.SettingsState();
     @AuraEnabled
     public Datetime generatedAt;
   }
@@ -246,31 +221,14 @@ public with sharing class BIGOTOOL_DashboardController {
     return row;
   }
 
-  private static TogglesState loadToggles() {
-    TogglesState ts = new TogglesState();
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getInstance();
-    if (cs != null) {
-      ts.masterSwitch = cs.Master_Switch__c != false;
-      ts.loggingEnabled = cs.Logging_Enabled__c != false;
-      ts.archivingEnabled = cs.Archiving_Enabled__c != false;
-      ts.debugMode = cs.Debug_Mode__c == true;
-    }
-    return ts;
+  private static BIGOTOOL_Toggles.SettingsState loadToggles() {
+    return BIGOTOOL_Toggles.currentSettings();
   }
 
   /** Returns the org-default custom setting values for the configuration popup. */
   @AuraEnabled
-  public static OrgSettings getOrgSettings() {
-    OrgSettings os = new OrgSettings();
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
-    if (cs != null) {
-      os.masterSwitch = cs.Master_Switch__c != false;
-      os.loggingEnabled = cs.Logging_Enabled__c != false;
-      os.archivingEnabled = cs.Archiving_Enabled__c != false;
-      os.debugMode = cs.Debug_Mode__c == true;
-      os.maxBatchConcurrency = cs.Max_Batch_Concurrency__c;
-    }
-    return os;
+  public static BIGOTOOL_Toggles.SettingsState getOrgSettings() {
+    return BIGOTOOL_Toggles.orgSettings();
   }
 
   /**
@@ -278,7 +236,7 @@ public with sharing class BIGOTOOL_DashboardController {
    * popup. Gated by the BIGOTOOL_Can_Configure custom permission.
    */
   @AuraEnabled
-  public static OrgSettings saveOrgSettings(
+  public static BIGOTOOL_Toggles.SettingsState saveOrgSettings(
     Boolean masterSwitch,
     Boolean loggingEnabled,
     Boolean archivingEnabled,
@@ -288,17 +246,13 @@ public with sharing class BIGOTOOL_DashboardController {
     if (!FeatureManagement.checkPermission('BIGOTOOL_Can_Configure')) {
       throw new AuraHandledException('You do not have permission to manage BIGOTOOL settings.');
     }
-    BIGOTOOL_Settings__c cs = BIGOTOOL_Settings__c.getOrgDefaults();
-    if (cs == null || cs.Id == null) {
-      cs = new BIGOTOOL_Settings__c(SetupOwnerId = UserInfo.getOrganizationId());
-    }
-    cs.Master_Switch__c = masterSwitch == true;
-    cs.Logging_Enabled__c = loggingEnabled == true;
-    cs.Archiving_Enabled__c = archivingEnabled == true;
-    cs.Debug_Mode__c = debugMode == true;
-    cs.Max_Batch_Concurrency__c = (maxBatchConcurrency != null && maxBatchConcurrency > 0) ? maxBatchConcurrency : null;
-    upsert cs;
-    return getOrgSettings();
+    return BIGOTOOL_Toggles.saveOrgSettings(
+      masterSwitch,
+      loggingEnabled,
+      archivingEnabled,
+      debugMode,
+      maxBatchConcurrency
+    );
   }
 
   public class JobRecencyComparator implements Comparator<Archive_Job_Log__b> {
